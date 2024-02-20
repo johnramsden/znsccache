@@ -2,7 +2,7 @@
 
 ```
 cd /data/john
-mkdir libs
+mkdir -p libs
 
 git clone https://github.com/westerndigitalcorporation/libzbd.git
 cd libzbd
@@ -12,10 +12,21 @@ make
 make install
 ```
 
+## libgcrypt
+
+```
+apt install libgcrypt20-dev
+```
+
 ## Compiling
 
 ```
 export LD_LIBRARY_PATH=/data/john/libs/lib
-make
-sudo LD_LIBRARY_PATH=/data/john/libs/lib ./zns
+make clean && make
+```
+
+## Run
+
+```
+sudo LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d -c 4096
 ```
