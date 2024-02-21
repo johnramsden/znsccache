@@ -48,6 +48,24 @@ print_zbd_info(struct zbd_info *info) {
     printf("model=%u\n", info->model);
 }
 
+// void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data);
+// int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out);
+// void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data);
+
+void test_ll(zncc_chunkcache *cc) {
+    zncc_chunk_info ci[10];
+    zncc_chunk_info ci_out[10];
+    for (int i =0; i < 10; i++) {
+        ci[i] = (zncc_chunk_info){.chunk = i, .zone = i};
+    }
+    for (int i = 0; i < 10; i++) {
+        zncc_bucket_push_front(&cc->free_list, ci[i]);
+    }
+    for (int i = 0; i < 10; i++) {
+        zncc_bucket_pop_back(&cc->free_list, &ci_out[i]);
+    }
+}
+
 int
 main(int argc, char **argv) {
     int ret = 0;
@@ -112,6 +130,8 @@ main(int argc, char **argv) {
         fprintf (stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
+
+    test_ll(&cc);
 
 //     struct zbd_info info;
 

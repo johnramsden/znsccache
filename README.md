@@ -28,5 +28,5 @@ make clean && make
 ## Run
 
 ```
-sudo LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d -c 4096
+sudo LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d -c 1073741824
 ```

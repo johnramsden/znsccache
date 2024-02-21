@@ -96,20 +96,19 @@ static int find_bucket(char const * const uuid, uint32_t num_chunks, uint32_t *b
 /**
  * @brief Place an item in the cache
  *
- * @param cc
- * @param uuid
- * @param data
- * @return int
+ * @param cc    Chunk cache instance
+ * @param uuid  Chunk unique ID
+ * @param data  Buffer containing data
+ * @return int  Non-zero on error
  */
 int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data) {
     uint32_t bucket;
     int ret = find_bucket(uuid, cc->chunks_total, &bucket);
-    // if (cc->buckets[bucket] == NULL) {
-
-    // }
     if (ret != 0) {
         return ret;
     }
+
+    dbg_printf("Found bucket: %u\n", bucket);
 }
 
 /**
@@ -162,10 +161,16 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
         nomem();
     }
 
-    cc->buckets = malloc(cc->chunks_total *sizeof(zncc_bucket_node));
+    cc->buckets = malloc(cc->chunks_total *sizeof(zncc_bucket_list));
     if (cc->buckets == NULL) {
         nomem();
     }
+
+    for (int i = 0; i < cc->chunks_total; i++) {
+        zncc_bucket_init_list(&cc->buckets[i]);
+    }
+
+    zncc_bucket_init_list(&cc->free_list);
 
     dbg_printf("Initialized chunk cache:\n"
                "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\n",
