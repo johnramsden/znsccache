@@ -16,6 +16,7 @@ typedef struct zncc_bucket_node {
 } zncc_bucket_node;
 
 typedef struct zncc_bucket_list {
+    uint32_t length;
     zncc_bucket_node* head;
     zncc_bucket_node* tail;
 } zncc_bucket_list;
@@ -46,5 +47,8 @@ void nomem();
 #else
 #define dbg_printf(...)
 #endif
+
+// Get chunk number from (zone, chunk)
+#define ABSOLUTE_CHUNK(z, c) (((z) * (c)) + (c))
 
 #endif

@@ -66,6 +66,10 @@ void test_ll(zncc_chunkcache *cc) {
     }
 }
 
+void test_put(zncc_chunkcache *cc) {
+    zncc_put(cc, "hgj76rcgt45u", NULL);
+}
+
 int
 main(int argc, char **argv) {
     int ret = 0;
@@ -131,7 +135,7 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    test_ll(&cc);
+    test_put(&cc);
 
 //     struct zbd_info info;
 

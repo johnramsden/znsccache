@@ -109,6 +109,26 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data) {
     }
 
     dbg_printf("Found bucket: %u\n", bucket);
+
+    // Get free chunk
+    zncc_chunk_info zi;
+    ret = zncc_bucket_pop_back(&cc->free_list, &zi);
+    if (ret != 0) {
+        dbg_printf("Cache full, length=%u\n", cc->free_list.length);
+        // TODO
+        return -1;
+    }
+    dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
+
+    // Add to bucket
+    zncc_bucket_push_front(&cc->buckets[bucket], zi);
+
+    // TODO WRITE TO DISK!
+
+    // Set allocated
+    cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
+
+    return 0;
 }
 
 /**
@@ -131,12 +151,24 @@ static int chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uin
 }
 
 /**
+ * @brief Fill the "free list" with zns free chunks
+ *
+ * @param cc   Chunk cache
+ * @return int Non-zero on error
+ */
+static void populate_free_list(zncc_chunkcache *cc) {
+    for (int zti = 0; zti < cc->zones_total; zti++) {
+        zncc_bucket_push_front(&cc->free_list, (zncc_chunk_info){.chunk = 0, .zone = zti});
+    }
+}
+
+/**
  * @brief Initialize the chunk cache
  *
  * @param[out] cc        Chunk cache to initialize
  * @param[in] device     ZNS block device
  * @param[in] chunk_size Size of chunk in bytes
- * @return int3          Non-zero on error
+ * @return int           Non-zero on error
  */
 int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_size) {
     struct zbd_info info;
@@ -156,14 +188,23 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
     cc->device = device;
     cc->chunks_total = cc->zones_total*cc->chunks_per_zone;
 
-    cc->allocated = malloc(cc->chunks_total *sizeof(uint32_t));
+    uint32_t sz_allocated = cc->chunks_total *sizeof(uint32_t);
+    cc->allocated = malloc(sz_allocated);
     if (cc->allocated == NULL) {
         nomem();
     }
 
+    // Set allocated to zero
+    memset(cc->allocated, 0, sz_allocated);
+
     cc->buckets = malloc(cc->chunks_total *sizeof(zncc_bucket_list));
     if (cc->buckets == NULL) {
         nomem();
+    }
+
+    if (cc->chunks_per_zone <= 0) {
+        dbg_printf("Minimum 1 chunk per zone, found %u\n", cc->chunks_per_zone);
+        return -1;
     }
 
     for (int i = 0; i < cc->chunks_total; i++) {
@@ -171,6 +212,8 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
     }
 
     zncc_bucket_init_list(&cc->free_list);
+
+    populate_free_list(cc);
 
     dbg_printf("Initialized chunk cache:\n"
                "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\n",

@@ -5,10 +5,10 @@
 void zncc_bucket_init_list(zncc_bucket_list* list) {
     list->head = NULL;
     list->tail = NULL;
+    list->length = 0;
 }
 
 void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data) {
-    dbg_printf("Push chunk=%u, zone=%u\n", data.chunk, data.zone);
     zncc_bucket_node* new = (zncc_bucket_node*)malloc(sizeof(zncc_bucket_node));
     if (new == NULL) {
         nomem();
@@ -24,6 +24,8 @@ void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data) {
         list->head = new;
     }
     list->tail = new;
+    list->length++;
+    dbg_printf("Push chunk=%u, zone=%u, new length=%u\n", data.chunk, data.zone, list->length);
 }
 
 int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out) {
@@ -42,7 +44,9 @@ int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out) {
         list->head = NULL;
     }
 
-    dbg_printf("Put chunk=%u, zone=%u\n", data_out->chunk, data_out->zone);
+    list->length--;
+
+    dbg_printf("Pop chunk=%u, zone=%u, new length=%u\n", data_out->chunk, data_out->zone, list->length);
 
     free(removed_node);
     return 0;
@@ -53,7 +57,7 @@ void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data) {
     if (new == NULL) {
         nomem();
     }
-    dbg_printf("Push chunk=%u, zone=%u\n", data.chunk, data.zone);
+
     new->data = data;
     new->prev = NULL;
     new->next = list->head;
@@ -65,7 +69,9 @@ void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data) {
         list->tail = new;
     }
 
+    list->length++;
     list->head = new;
+    dbg_printf("Push chunk=%u, zone=%u, new length=%u\n", data.chunk, data.zone, list->length);
 }
 
 
