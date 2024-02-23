@@ -2,6 +2,19 @@
 
 #include "znsccache.h"
 
+void zncc_bucket_destroy_list(zncc_bucket_list* list) {
+    zncc_bucket_node *b = list->head;
+    zncc_bucket_node *b_free;
+    while (1) {
+        if (b == NULL) {
+            break;
+        }
+        b_free = b;
+        b = b->next;
+        free(b_free);
+    }
+}
+
 void zncc_bucket_init_list(zncc_bucket_list* list) {
     list->head = NULL;
     list->tail = NULL;

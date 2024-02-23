@@ -11,6 +11,15 @@
 
 #include "znsccache.h"
 
+void zncc_destroy(zncc_chunkcache *cc) {
+    for (int i = 0; i < cc->chunks_total; i++) {
+        zncc_bucket_destroy_list(&cc->buckets[i]);
+    }
+    free(cc->buckets);
+    zncc_bucket_destroy_list(&cc->free_list);
+    free(cc->allocated);
+}
+
 /**
  * @brief Take a CRC32 hash of a string
  *

@@ -21,6 +21,7 @@ typedef struct zncc_bucket_list {
     zncc_bucket_node* tail;
 } zncc_bucket_list;
 
+void zncc_bucket_destroy_list(zncc_bucket_list* list);
 void zncc_bucket_init_list(zncc_bucket_list* list);
 void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data);
 int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out);
@@ -38,6 +39,7 @@ typedef struct zncc_chunkcache {
 
 int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data);
 int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_size);
+void zncc_destroy(zncc_chunkcache *cc);
 
 void nomem();
 

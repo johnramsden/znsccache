@@ -152,7 +152,11 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    test_put(&cc);
+
+
+    zncc_destroy(&cc);
+
+    // test_put(&cc);
 
 //     struct zbd_info info;
 
