@@ -93,6 +93,19 @@ static int find_bucket(char const * const uuid, uint32_t num_chunks, uint32_t *b
     return 0;
 }
 
+static void print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
+    zncc_bucket_node *b = bucket->head;
+    printf("Bucket=%u: ", b_num);
+    while (1) {
+        if (b == NULL) {
+            break;
+        }
+        printf("(zone=%u,chunk=%u), ", b->data.zone, b->data.chunk);
+        b = b->next;
+    }
+    printf("\n");
+}
+
 /**
  * @brief Place an item in the cache
  *
@@ -127,6 +140,8 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data) {
 
     // Set allocated
     cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
+
+    print_bucket(&cc->buckets[bucket],bucket);
 
     return 0;
 }

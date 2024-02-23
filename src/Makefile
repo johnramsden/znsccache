@@ -11,7 +11,7 @@ endif
 ODIR=obj
 LDIR =-L/data/john/libs/lib
 
-LIBS=-lm -lzbd -lgpg-error `libgcrypt-config --cflags --libs`
+LIBS=-lm -lzbd -lgpg-error -luuid `libgcrypt-config --cflags --libs`
 
 _DEPS = znsccache.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))

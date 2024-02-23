@@ -5,11 +5,26 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include <errno.h>
+#include <uuid/uuid.h>
 
 #include <libzbd/zbd.h>
 #include <gcrypt.h>
 
 #include "znsccache.h"
+
+#define UUID_SIZE 37
+
+static char * genuuid() {
+    uuid_t binuuid;
+    uuid_generate_random(binuuid);
+    char *uuid = malloc(UUID_SIZE);
+    if (uuid == NULL) {
+        return NULL;
+    }
+    uuid_unparse_upper(binuuid, uuid);
+
+    return uuid;
+}
 
 /**
  * @brief Convert a string to an unsigned 64bit int
@@ -67,7 +82,9 @@ void test_ll(zncc_chunkcache *cc) {
 }
 
 void test_put(zncc_chunkcache *cc) {
-    zncc_put(cc, "hgj76rcgt45u", NULL);
+    for (int i = 0; i < cc->zones_total; i++) {
+        zncc_put(cc, genuuid(), NULL);
+    }
 }
 
 int

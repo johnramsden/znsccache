@@ -18,6 +18,12 @@ make install
 apt install libgcrypt20-dev
 ```
 
+## uuid
+
+```
+apt install uuid-dev
+```
+
 ## Compiling
 
 ```
