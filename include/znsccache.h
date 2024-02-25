@@ -38,6 +38,7 @@ int zncc_bucket_pop_by_uuid(zncc_bucket_list* list, char const * const uuid, znc
 // CACHE
 
 typedef struct zncc_chunkcache {
+    uint32_t chunk_size;
     uint32_t chunks_total;
     uint32_t chunks_per_zone;
     uint32_t zones_total;

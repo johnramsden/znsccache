@@ -1,7 +1,7 @@
 IDIR =../include
 IEXTRADIR =/data/john/libs/include
 CC=gcc
-CFLAGS=-I$(IDIR) -I$(IEXTRADIR)
+CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g
 
 # define DEBUG in the source if we are debugging
 ifeq ($(DEBUG), 1)

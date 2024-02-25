@@ -48,12 +48,16 @@ void test_ll(zncc_chunkcache *cc) {
 }
 
 void test_put(zncc_chunkcache *cc) {
+    char * td = malloc(cc->chunk_size);
+    td[0] = 'a';
+    td[1] = '\0';
     for (int i = 0; i < cc->zones_total; i++) {
         char * uuid = genuuid();
-        zncc_put(cc, uuid, NULL);
+        zncc_put(cc, uuid, td);
         zncc_get(cc, uuid, NULL);
         free(uuid);
     }
+    free(td);
 }
 
 int

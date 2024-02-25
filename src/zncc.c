@@ -25,8 +25,79 @@ void zncc_destroy(zncc_chunkcache *cc) {
     free(cc->allocated);
 }
 
+/**
+ * @brief Write a chunk to a zone
+ *
+ * @param cc         chunk cache
+ * @param chunk_info chunk location to write to
+ * @param data       Data to write
+ * @return int       Non-zero on error
+ */
 int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * data) {
+    struct zbd_info info;
 
+    int ret = 0;
+
+    int fd = zbd_open(cc->device, O_RDWR, &info);
+    if (fd < 0) {
+        fprintf(stderr, "Error opening device: %s\n", cc->device);
+        return fd;
+    }
+
+    // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
+    // capacity will be reported.
+    off_t ofst = 0;
+    off_t len = 0;
+    size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
+    struct zbd_zone *zones = malloc(sz);
+    if (zones == NULL) {
+        fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
+        return -1;
+    }
+    unsigned int nr_zones = info.nr_zones;
+    ret = zbd_report_zones(fd, ofst, len,
+                           ZBD_RO_ALL, zones, &nr_zones);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't report zone info\n");
+        return ret;
+    }
+
+    printf("zone %u write pointer: %llu\n", chunk_info.zone, zones[chunk_info.zone].wp);
+
+    // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+
+    // write to fd at offset 0
+
+    ssize_t b = pwrite(fd, data, cc->chunk_size, zones[chunk_info.zone].wp);
+    if (b != cc->chunk_size) {
+        fprintf(stderr, "Couldn't write to fd\n");
+        ret = -1;
+        goto cleanup;
+    }
+
+    char * buf = malloc(cc->chunk_size);
+    if (buf == NULL) {
+        ret = -1;
+        goto cleanup;
+    }
+    b = pread(fd, buf, cc->chunk_size, zones[chunk_info.zone].wp);
+    if (b != cc->chunk_size) {
+        fprintf(stderr, "Couldn't read from fd\n");
+        ret = -1;
+        goto cleanup;
+    }
+    if (strcmp(data, buf)) {
+        fprintf(stderr, "data(%s) != buf(%s)\n", data, buf);
+        ret = -1;
+        goto cleanup;
+    }
+    printf("Read %s from fd\n", buf);
+
+cleanup:
+    free(buf);
+    zbd_close(fd);
+    free(zones);
+    return ret;
 }
 
 int zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char ** data) {
@@ -182,7 +253,10 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data) {
     // Add to bucket
     zncc_bucket_push_front(&cc->buckets[bucket], zi);
 
-    // TODO WRITE TO DISK!
+    ret = zncc_write_chunk(cc, zi, data);
+    if (ret != 0) {
+        return ret;
+    }
 
     // Set allocated
     cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
@@ -232,21 +306,31 @@ static void populate_free_list(zncc_chunkcache *cc) {
  * @return int           Non-zero on error
  */
 int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_size) {
+    int ret = 0;
     struct zbd_info info;
 
     int fd = zbd_open(device, O_RDWR, &info);
 
     if (fd < 0) {
         dbg_printf("Error opening device: %s\n", device);
-        return fd;
+        ret = fd;
+        goto cleanup;
+    }
+
+    ret = zbd_reset_zones(fd, 0, 0);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't reset zones\n");
+        goto cleanup;
     }
 
     if (chunks_in_zone(chunk_size, info.zone_size, &cc->chunks_per_zone) != 0) {
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     cc->zones_total = info.nr_zones;
     cc->device = device;
+    cc->chunk_size = chunk_size;
     cc->chunks_total = cc->zones_total*cc->chunks_per_zone;
 
     uint32_t sz_allocated = cc->chunks_total *sizeof(uint32_t);
@@ -265,7 +349,8 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
 
     if (cc->chunks_per_zone <= 0) {
         dbg_printf("Minimum 1 chunk per zone, found %u\n", cc->chunks_per_zone);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     for (int i = 0; i < cc->chunks_total; i++) {
@@ -277,8 +362,9 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
     populate_free_list(cc);
 
     dbg_printf("Initialized chunk cache:\n"
-               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\n",
-               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total );
-
-    return 0;
+               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\n",
+               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size);
+cleanup:
+    zbd_close(fd);
+    return ret;
 }
