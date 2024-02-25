@@ -1,12 +1,12 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <inttypes.h>
-
-#include <uuid/uuid.h>
+#include "util.h"
 
 #include "znsccache.h"
-#include "util.h"
+
+#include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <uuid/uuid.h>
 
 /**
  * @brief Exit if NOMEM
@@ -22,7 +22,8 @@ nomem() {
  *
  * @return char* UUID or NULL on error
  */
-char * genuuid() {
+char *
+genuuid() {
     uuid_t binuuid;
     uuid_generate_random(binuuid);
     char *uuid = malloc(UUID_SIZE);
@@ -41,7 +42,8 @@ char * genuuid() {
  * @param num String as an uint64
  * @return int Non-zero on error
  */
-int string_to_uint64(char const * const str, uint64_t *num) {
+int
+string_to_uint64(char const *const str, uint64_t *num) {
     if (sscanf(str, "%" SCNu64, num) == 1) {
         return 0;
     }

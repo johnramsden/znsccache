@@ -1,22 +1,22 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <errno.h>
-
-#include <libzbd/zbd.h>
-#include <gcrypt.h>
-
 #include "znsccache.h"
+
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <gcrypt.h>
+#include <getopt.h>
+#include <inttypes.h>
+#include <libzbd/zbd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /**
  * @brief Cleanup resources
  *
  * @param cc  Chunk cache
  */
-void zncc_destroy(zncc_chunkcache *cc) {
+void
+zncc_destroy(zncc_chunkcache *cc) {
     for (int i = 0; i < cc->chunks_total; i++) {
         zncc_bucket_destroy_list(&cc->buckets[i]);
     }
@@ -33,7 +33,8 @@ void zncc_destroy(zncc_chunkcache *cc) {
  * @param data       Data to write
  * @return int       Non-zero on error
  */
-int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * data) {
+int
+zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     struct zbd_info info;
 
     int ret = 0;
@@ -48,15 +49,14 @@ int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * dat
     // capacity will be reported.
     off_t ofst = 0;
     off_t len = 0;
-    size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
+    size_t sz = info.nr_zones * (sizeof(struct zbd_zone));
     struct zbd_zone *zones = malloc(sz);
     if (zones == NULL) {
         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
         return -1;
     }
     unsigned int nr_zones = info.nr_zones;
-    ret = zbd_report_zones(fd, ofst, len,
-                           ZBD_RO_ALL, zones, &nr_zones);
+    ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
     if (ret != 0) {
         fprintf(stderr, "Couldn't report zone info\n");
         return ret;
@@ -75,7 +75,7 @@ int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * dat
         goto cleanup;
     }
 
-    char * buf = malloc(cc->chunk_size);
+    char *buf = malloc(cc->chunk_size);
     if (buf == NULL) {
         ret = -1;
         goto cleanup;
@@ -100,8 +100,8 @@ cleanup:
     return ret;
 }
 
-int zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char ** data) {
-
+int
+zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
 }
 
 /**
@@ -111,7 +111,8 @@ int zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char ** dat
  * @param[out] out      Hash of hashable
  * @return uint32_t     Non-zero on error
  */
-static uint32_t crc32_hash(char const * const hashable, uint32_t *out) {
+static uint32_t
+crc32_hash(char const *const hashable, uint32_t *out) {
     gcry_error_t err;
     gcry_md_hd_t hd;
     unsigned char *hash;
@@ -153,15 +154,12 @@ static uint32_t crc32_hash(char const * const hashable, uint32_t *out) {
         dbg_printf("%02x", hash[i]);
     }
 
-    *out = ((unsigned int)hash[0] << 24) |
-           ((unsigned int)hash[1] << 16) |
-           ((unsigned int)hash[2] << 8)  |
-           (unsigned int)hash[3];
+    *out = ((unsigned int) hash[0] << 24) | ((unsigned int) hash[1] << 16) |
+           ((unsigned int) hash[2] << 8) | (unsigned int) hash[3];
 
     dbg_printf("\n");
 
     dbg_printf("Hashed int: %u\n", *out);
-
 
     gcry_md_close(hd);
 
@@ -176,7 +174,8 @@ static uint32_t crc32_hash(char const * const hashable, uint32_t *out) {
  * @param bucket     Bucket number (0 to num_chunks-1)
  * @return uint32_t  Non-zero on error
  */
-static int find_bucket(char const * const uuid, uint32_t num_chunks, uint32_t *bucket) {
+static int
+find_bucket(char const *const uuid, uint32_t num_chunks, uint32_t *bucket) {
     uint32_t hash;
     int ret = crc32_hash(uuid, &hash);
     if (ret != 0) {
@@ -186,7 +185,8 @@ static int find_bucket(char const * const uuid, uint32_t num_chunks, uint32_t *b
     return 0;
 }
 
-static void print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
+static void
+print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
     zncc_bucket_node *b = bucket->head;
     printf("Bucket=%u: ", b_num);
     while (1) {
@@ -199,7 +199,8 @@ static void print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
     printf("\n");
 }
 
-int zncc_get(zncc_chunkcache *cc, char const * const uuid, char ** data) {
+int
+zncc_get(zncc_chunkcache *cc, char const *const uuid, char **data) {
 
     dbg_printf("Get: uuid=%s\n", uuid);
     uint32_t bucket;
@@ -214,8 +215,8 @@ int zncc_get(zncc_chunkcache *cc, char const * const uuid, char ** data) {
 
     zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, &data_out);
 
-    dbg_printf("Found chunk (uuid=%s, zone=%u, chunk=%u)\n",
-               data_out.uuid, data_out.zone, data_out.chunk);
+    dbg_printf("Found chunk (uuid=%s, zone=%u, chunk=%u)\n", data_out.uuid, data_out.zone,
+               data_out.chunk);
 
     // TODO data
 }
@@ -228,7 +229,8 @@ int zncc_get(zncc_chunkcache *cc, char const * const uuid, char ** data) {
  * @param data  Buffer containing data
  * @return int  Non-zero on error
  */
-int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data) {
+int
+zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data) {
     uint32_t bucket;
     int ret = find_bucket(uuid, cc->chunks_total, &bucket);
     if (ret != 0) {
@@ -261,7 +263,7 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data) {
     // Set allocated
     cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
 
-    print_bucket(&cc->buckets[bucket],bucket);
+    print_bucket(&cc->buckets[bucket], bucket);
 
     return 0;
 }
@@ -274,9 +276,11 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data) {
  * @param[out] chunks_in_zone Number of chunks per zone
  * @return int Non-zero on error
  */
-static int chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uint32_t *chunks_in_zone) {
+static int
+chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uint32_t *chunks_in_zone) {
     if (chunk_size > zone_size) {
-        dbg_printf("chunk_size=%" PRIu64 " > zone_size=%llu: not supported\n", chunk_size, zone_size);
+        dbg_printf("chunk_size=%" PRIu64 " > zone_size=%llu: not supported\n", chunk_size,
+                   zone_size);
         return -1;
     }
 
@@ -291,7 +295,8 @@ static int chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uin
  * @param cc   Chunk cache
  * @return int Non-zero on error
  */
-static void populate_free_list(zncc_chunkcache *cc) {
+static void
+populate_free_list(zncc_chunkcache *cc) {
     for (int zti = 0; zti < cc->zones_total; zti++) {
         zncc_bucket_push_front(&cc->free_list, (zncc_chunk_info){.chunk = 0, .zone = zti});
     }
@@ -305,7 +310,8 @@ static void populate_free_list(zncc_chunkcache *cc) {
  * @param[in] chunk_size Size of chunk in bytes
  * @return int           Non-zero on error
  */
-int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_size) {
+int
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size) {
     int ret = 0;
     struct zbd_info info;
 
@@ -331,9 +337,9 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
     cc->zones_total = info.nr_zones;
     cc->device = device;
     cc->chunk_size = chunk_size;
-    cc->chunks_total = cc->zones_total*cc->chunks_per_zone;
+    cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
 
-    uint32_t sz_allocated = cc->chunks_total *sizeof(uint32_t);
+    uint32_t sz_allocated = cc->chunks_total * sizeof(uint32_t);
     cc->allocated = malloc(sz_allocated);
     if (cc->allocated == NULL) {
         nomem();
@@ -342,7 +348,7 @@ int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_siz
     // Set allocated to zero
     memset(cc->allocated, 0, sz_allocated);
 
-    cc->buckets = malloc(cc->chunks_total *sizeof(zncc_bucket_list));
+    cc->buckets = malloc(cc->chunks_total * sizeof(zncc_bucket_list));
     if (cc->buckets == NULL) {
         nomem();
     }

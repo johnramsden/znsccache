@@ -42,3 +42,9 @@ sudo LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d -c 1073741824
 ```
 sudo LD_LIBRARY_PATH=/data/john/libs/lib gdb --args ./znsccache -d /dev/nvme0n2 -c 1073741824
 ```
+
+## Tidy
+
+```
+clang-format -i src/*.c include/*.h
+```

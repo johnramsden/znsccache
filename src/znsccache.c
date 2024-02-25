@@ -1,18 +1,17 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <errno.h>
-
-#include <libzbd/zbd.h>
-
 #include "znsccache.h"
 
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <inttypes.h>
+#include <libzbd/zbd.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 /**
-* https://github.com/westerndigitalcorporation/libzbd/blob/master/include/libzbd/zbd.h
-*/
+ * https://github.com/westerndigitalcorporation/libzbd/blob/master/include/libzbd/zbd.h
+ */
 static void
 print_zbd_info(struct zbd_info *info) {
     printf("vendor_id=%s\n", info->vendor_id);
@@ -33,10 +32,11 @@ print_zbd_info(struct zbd_info *info) {
 // int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out);
 // void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data);
 
-void test_ll(zncc_chunkcache *cc) {
+void
+test_ll(zncc_chunkcache *cc) {
     zncc_chunk_info ci[10];
     zncc_chunk_info ci_out[10];
-    for (int i =0; i < 10; i++) {
+    for (int i = 0; i < 10; i++) {
         ci[i] = (zncc_chunk_info){.chunk = i, .zone = i};
     }
     for (int i = 0; i < 10; i++) {
@@ -47,12 +47,13 @@ void test_ll(zncc_chunkcache *cc) {
     }
 }
 
-void test_put(zncc_chunkcache *cc) {
-    char * td = malloc(cc->chunk_size);
+void
+test_put(zncc_chunkcache *cc) {
+    char *td = malloc(cc->chunk_size);
     td[0] = 'a';
     td[1] = '\0';
     for (int i = 0; i < cc->zones_total; i++) {
-        char * uuid = genuuid();
+        char *uuid = genuuid();
         zncc_put(cc, uuid, td);
         zncc_get(cc, uuid, NULL);
         free(uuid);
@@ -77,7 +78,7 @@ main(int argc, char **argv) {
 
     opterr = 0;
 
-    while ((c = getopt (argc, argv, "d:c:")) != -1) {
+    while ((c = getopt(argc, argv, "d:c:")) != -1) {
         switch (c) {
             case 'd':
                 device = optarg;
@@ -87,13 +88,11 @@ main(int argc, char **argv) {
                 break;
             case '?':
                 if (optopt == 'd') {
-                    fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-                } else if (isprint (optopt)) {
-                    fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+                    fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+                } else if (isprint(optopt)) {
+                    fprintf(stderr, "Unknown option `-%c'.\n", optopt);
                 } else
-                    fprintf (stderr,
-                        "Unknown option character `\\x%x'.\n",
-                        optopt);
+                    fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
                 return -1;
             default:
                 exit(-1);
@@ -101,13 +100,13 @@ main(int argc, char **argv) {
     }
 
     if (device == NULL) {
-        fprintf (stderr, "Option -d is a required flag.\n");
-        exit (EXIT_FAILURE);
+        fprintf(stderr, "Option -d is a required flag.\n");
+        exit(EXIT_FAILURE);
     }
 
     if (chunk_size_str == NULL) {
-        fprintf (stderr, "Option -c is a required flag.\n");
-        exit (EXIT_FAILURE);
+        fprintf(stderr, "Option -c is a required flag.\n");
+        exit(EXIT_FAILURE);
     }
 
     printf("Device: %s\n", device);
@@ -115,13 +114,13 @@ main(int argc, char **argv) {
     ret = string_to_uint64(chunk_size_str, &chunk_size_int);
 
     if (ret != 0) {
-        fprintf (stderr, "Invalid chunk size=%s (bytes).\n", chunk_size_str);
+        fprintf(stderr, "Invalid chunk size=%s (bytes).\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
 
     ret = zncc_init(&cc, device, chunk_size_int);
     if (ret != 0) {
-        fprintf (stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
+        fprintf(stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
 
@@ -129,70 +128,68 @@ main(int argc, char **argv) {
 
     zncc_destroy(&cc);
 
+    //     struct zbd_info info;
 
+    //     fd = zbd_open(DEVICE, O_RDWR, &info);
+    //     if (fd < 0) {
+    //         fprintf(stderr, "Error opening device: %s\n", DEVICE);
+    //         return fd;
+    //     }
 
-//     struct zbd_info info;
+    //     print_zbd_info(&info);
+    //     // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
+    //     // capacity will be reported.
+    //     off_t ofst = 0;
+    //     off_t len = 0;
+    //     size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
+    //     struct zbd_zone *zones = malloc(sz);
+    //     if (zones == NULL) {
+    //         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
+    //         return -1;
+    //     }
+    //     unsigned int nr_zones = info.nr_zones;
+    //     ret = zbd_report_zones(fd, ofst, len,
+    //                            ZBD_RO_ALL, zones, &nr_zones);
+    //     if (ret != 0) {
+    //         fprintf(stderr, "Couldn't report zone info\n");
+    //         return ret;
+    //     }
 
-//     fd = zbd_open(DEVICE, O_RDWR, &info);
-//     if (fd < 0) {
-//         fprintf(stderr, "Error opening device: %s\n", DEVICE);
-//         return fd;
-//     }
+    //     printf("zone %u write pointer: %llu\n", 0, zones[0].wp);
 
-//     print_zbd_info(&info);
-//     // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
-//     // capacity will be reported.
-//     off_t ofst = 0;
-//     off_t len = 0;
-//     size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
-//     struct zbd_zone *zones = malloc(sz);
-//     if (zones == NULL) {
-//         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
-//         return -1;
-//     }
-//     unsigned int nr_zones = info.nr_zones;
-//     ret = zbd_report_zones(fd, ofst, len,
-//                            ZBD_RO_ALL, zones, &nr_zones);
-//     if (ret != 0) {
-//         fprintf(stderr, "Couldn't report zone info\n");
-//         return ret;
-//     }
+    //     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
 
-//     printf("zone %u write pointer: %llu\n", 0, zones[0].wp);
+    //     // write to fd at offset 0
 
-//     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+    //     ret = zbd_reset_zones(fd, 0, 0);
+    //     if (ret != 0) {
+    //         fprintf(stderr, "Couldn't reset zones\n");
+    //         goto cleanup;
+    //     }
+    //     int num = 2;
+    //     ssize_t b = pwrite(fd, &num, sizeof(num), zones[0].wp);
+    //     if (b != sizeof(num)) {
+    //         fprintf(stderr, "Couldn't write to fd\n");
+    //         ret = -1;
+    //         goto cleanup;
+    //     }
 
-//     // write to fd at offset 0
+    //     int buf = 0;
+    //     b = pread(fd, &buf, sizeof(buf), zones[0].wp);
+    //     if (b != sizeof(num)) {
+    //         fprintf(stderr, "Couldn't read from fd\n");
+    //         ret = -1;
+    //         goto cleanup;
+    //     }
+    //     if (buf != num) {
+    //         fprintf(stderr, "buf(%i) != num(%i)\n", buf, num);
+    //         ret = -1;
+    //         goto cleanup;
+    //     }
+    //     printf("Read %i from fd\n", buf);
 
-//     ret = zbd_reset_zones(fd, 0, 0);
-//     if (ret != 0) {
-//         fprintf(stderr, "Couldn't reset zones\n");
-//         goto cleanup;
-//     }
-//     int num = 2;
-//     ssize_t b = pwrite(fd, &num, sizeof(num), zones[0].wp);
-//     if (b != sizeof(num)) {
-//         fprintf(stderr, "Couldn't write to fd\n");
-//         ret = -1;
-//         goto cleanup;
-//     }
-
-//     int buf = 0;
-//     b = pread(fd, &buf, sizeof(buf), zones[0].wp);
-//     if (b != sizeof(num)) {
-//         fprintf(stderr, "Couldn't read from fd\n");
-//         ret = -1;
-//         goto cleanup;
-//     }
-//     if (buf != num) {
-//         fprintf(stderr, "buf(%i) != num(%i)\n", buf, num);
-//         ret = -1;
-//         goto cleanup;
-//     }
-//     printf("Read %i from fd\n", buf);
-
-// cleanup:
-//     zbd_close(fd);
-//     free(zones);
+    // cleanup:
+    //     zbd_close(fd);
+    //     free(zones);
     return ret;
 }

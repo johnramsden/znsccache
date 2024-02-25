@@ -1,9 +1,10 @@
+#include "znsccache.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "znsccache.h"
-
-void zncc_bucket_destroy_list(zncc_bucket_list* list) {
+void
+zncc_bucket_destroy_list(zncc_bucket_list *list) {
     zncc_bucket_node *b = list->head;
     zncc_bucket_node *b_free;
     while (1) {
@@ -24,8 +25,9 @@ void zncc_bucket_destroy_list(zncc_bucket_list* list) {
  * @param data_out Found chunk
  * @return int zero if match, nonzero on no match
  */
-int zncc_bucket_pop_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out) {
-    zncc_bucket_node* current = list->head;
+int
+zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chunk_info *data_out) {
+    zncc_bucket_node *current = list->head;
     while (current != NULL) {
         if (strcmp(current->data.uuid, uuid) != 0) {
             // No match
@@ -65,8 +67,10 @@ int zncc_bucket_pop_by_uuid(zncc_bucket_list* list, char const * const uuid, znc
  * @param data_out Found chunk
  * @return int zero if match, nonzero on no match
  */
-int zncc_bucket_peek_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out) {
-    zncc_bucket_node* current = list->head;
+int
+zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid,
+                         zncc_chunk_info *data_out) {
+    zncc_bucket_node *current = list->head;
     while (current != NULL) {
         if (strcmp(current->data.uuid, uuid) != 0) {
             // No match
@@ -82,14 +86,16 @@ int zncc_bucket_peek_by_uuid(zncc_bucket_list* list, char const * const uuid, zn
     return -1; // No match
 }
 
-void zncc_bucket_init_list(zncc_bucket_list* list) {
+void
+zncc_bucket_init_list(zncc_bucket_list *list) {
     list->head = NULL;
     list->tail = NULL;
     list->length = 0;
 }
 
-void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data) {
-    zncc_bucket_node* new = (zncc_bucket_node*)malloc(sizeof(zncc_bucket_node));
+void
+zncc_bucket_push_back(zncc_bucket_list *list, zncc_chunk_info data) {
+    zncc_bucket_node *new = (zncc_bucket_node *) malloc(sizeof(zncc_bucket_node));
     if (new == NULL) {
         nomem();
     }
@@ -108,13 +114,14 @@ void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data) {
     dbg_printf("Push chunk=%u, zone=%u, new length=%u\n", data.chunk, data.zone, list->length);
 }
 
-int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out) {
+int
+zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out) {
     if (list->tail == NULL) {
         // Empty
         return -1;
     }
 
-    zncc_bucket_node* removed_node = list->tail;
+    zncc_bucket_node *removed_node = list->tail;
     *data_out = removed_node->data;
 
     list->tail = removed_node->prev;
@@ -126,14 +133,16 @@ int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out) {
 
     list->length--;
 
-    dbg_printf("Pop chunk=%u, zone=%u, new length=%u\n", data_out->chunk, data_out->zone, list->length);
+    dbg_printf("Pop chunk=%u, zone=%u, new length=%u\n", data_out->chunk, data_out->zone,
+               list->length);
 
     free(removed_node);
     return 0;
 }
 
-void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data) {
-    zncc_bucket_node* new = (zncc_bucket_node*)malloc(sizeof(zncc_bucket_node));
+void
+zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data) {
+    zncc_bucket_node *new = (zncc_bucket_node *) malloc(sizeof(zncc_bucket_node));
     if (new == NULL) {
         nomem();
     }
@@ -153,7 +162,3 @@ void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data) {
     list->head = new;
     dbg_printf("Push chunk=%u, zone=%u, new length=%u\n", data.chunk, data.zone, list->length);
 }
-
-
-
-
