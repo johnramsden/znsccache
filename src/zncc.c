@@ -11,6 +11,11 @@
 
 #include "znsccache.h"
 
+/**
+ * @brief Cleanup resources
+ *
+ * @param cc  Chunk cache
+ */
 void zncc_destroy(zncc_chunkcache *cc) {
     for (int i = 0; i < cc->chunks_total; i++) {
         zncc_bucket_destroy_list(&cc->buckets[i]);
@@ -18,6 +23,14 @@ void zncc_destroy(zncc_chunkcache *cc) {
     free(cc->buckets);
     zncc_bucket_destroy_list(&cc->free_list);
     free(cc->allocated);
+}
+
+int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * data) {
+
+}
+
+int zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char ** data) {
+
 }
 
 /**
@@ -115,6 +128,27 @@ static void print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
     printf("\n");
 }
 
+int zncc_get(zncc_chunkcache *cc, char const * const uuid, char ** data) {
+
+    dbg_printf("Get: uuid=%s\n", uuid);
+    uint32_t bucket;
+    int ret = find_bucket(uuid, cc->chunks_total, &bucket);
+    if (ret != 0) {
+        return ret;
+    }
+
+    dbg_printf("Found bucket: %u\n", bucket);
+
+    zncc_chunk_info data_out;
+
+    zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, &data_out);
+
+    dbg_printf("Found chunk (uuid=%s, zone=%u, chunk=%u)\n",
+               data_out.uuid, data_out.zone, data_out.chunk);
+
+    // TODO data
+}
+
 /**
  * @brief Place an item in the cache
  *
@@ -123,13 +157,14 @@ static void print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
  * @param data  Buffer containing data
  * @return int  Non-zero on error
  */
-int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data) {
+int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data) {
     uint32_t bucket;
     int ret = find_bucket(uuid, cc->chunks_total, &bucket);
     if (ret != 0) {
         return ret;
     }
 
+    dbg_printf("Put: uuid=%s\n", uuid);
     dbg_printf("Found bucket: %u\n", bucket);
 
     // Get free chunk
@@ -141,6 +176,8 @@ int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data) {
         return -1;
     }
     dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
+
+    strcpy(zi.uuid, uuid);
 
     // Add to bucket
     zncc_bucket_push_front(&cc->buckets[bucket], zi);

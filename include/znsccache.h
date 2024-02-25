@@ -3,8 +3,14 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include "util.h"
+
+#define UUID_SIZE 37
+
+// BUCKET
 
 typedef struct zncc_chunk_info {
+    char uuid[UUID_SIZE];
     uint32_t chunk;
     uint32_t zone;
 } zncc_chunk_info;
@@ -26,6 +32,10 @@ void zncc_bucket_init_list(zncc_bucket_list* list);
 void zncc_bucket_push_back(zncc_bucket_list* list, zncc_chunk_info data);
 int zncc_bucket_pop_back(zncc_bucket_list* list, zncc_chunk_info *data_out);
 void zncc_bucket_push_front(zncc_bucket_list* list, zncc_chunk_info data);
+int zncc_bucket_peek_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out);
+int zncc_bucket_pop_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out);
+
+// CACHE
 
 typedef struct zncc_chunkcache {
     uint32_t chunks_total;
@@ -37,20 +47,11 @@ typedef struct zncc_chunkcache {
     zncc_bucket_list free_list;
 } zncc_chunkcache;
 
-int zncc_put(zncc_chunkcache *cc, char const * const uuid, void * data);
+int zncc_put(zncc_chunkcache *cc, char const * const uuid, char * data);
 int zncc_init(zncc_chunkcache *cc, char const * const device, uint64_t chunk_size);
 void zncc_destroy(zncc_chunkcache *cc);
-
-void nomem();
-
-/* Will only print messages (to stdout) when DEBUG is defined */
-#ifdef DEBUG
-#define dbg_printf(M, ...) printf("%s: " M , __func__, ##__VA_ARGS__)
-#else
-#define dbg_printf(...)
-#endif
-
-// Get chunk number from (zone, chunk)
-#define ABSOLUTE_CHUNK(z, c) (((z) * (c)) + (c))
+int zncc_get(zncc_chunkcache *cc, char const * const uuid, char ** data);
+int zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char * data);
+int zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char ** data);
 
 #endif

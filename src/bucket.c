@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "znsccache.h"
 
@@ -13,6 +14,72 @@ void zncc_bucket_destroy_list(zncc_bucket_list* list) {
         b = b->next;
         free(b_free);
     }
+}
+
+/**
+ * @brief Get a chunk item based on UUID and remove from list
+ *
+ * @param list Linked list
+ * @param uuid UUID to match on
+ * @param data_out Found chunk
+ * @return int zero if match, nonzero on no match
+ */
+int zncc_bucket_pop_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out) {
+    zncc_bucket_node* current = list->head;
+    while (current != NULL) {
+        if (strcmp(current->data.uuid, uuid) != 0) {
+            // No match
+            current = current->next;
+            continue;
+        }
+
+        // Matched uuid
+        *data_out = current->data;
+
+        if (current->prev != NULL) {
+            current->prev->next = current->next;
+        } else {
+            // Removed the head node
+            list->head = current->next;
+        }
+
+        if (current->next != NULL) {
+            current->next->prev = current->prev;
+        } else {
+            // Removed the tail node
+            list->tail = current->prev;
+        }
+
+        free(current);
+        return 0;
+    }
+
+    return -1; // No match
+}
+
+/**
+ * @brief Get a chunk item based on UUID
+ *
+ * @param list Linked list
+ * @param uuid UUID to match on
+ * @param data_out Found chunk
+ * @return int zero if match, nonzero on no match
+ */
+int zncc_bucket_peek_by_uuid(zncc_bucket_list* list, char const * const uuid, zncc_chunk_info *data_out) {
+    zncc_bucket_node* current = list->head;
+    while (current != NULL) {
+        if (strcmp(current->data.uuid, uuid) != 0) {
+            // No match
+            current = current->next;
+            continue;
+        }
+
+        // Matched uuid
+        *data_out = current->data;
+        return 0;
+    }
+
+    return -1; // No match
 }
 
 void zncc_bucket_init_list(zncc_bucket_list* list) {

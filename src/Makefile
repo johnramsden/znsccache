@@ -13,7 +13,7 @@ LDIR =-L/data/john/libs/lib
 
 LIBS=-lm -lzbd -lgpg-error -luuid `libgcrypt-config --cflags --libs`
 
-_DEPS = znsccache.h
+_DEPS = znsccache.h util.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
 _OBJ = znsccache.o zncc.o bucket.o util.o
