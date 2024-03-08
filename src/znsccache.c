@@ -54,8 +54,8 @@ test_put(zncc_chunkcache *cc) {
     td[1] = '\0';
     for (int i = 0; i < cc->zones_total; i++) {
         char *uuid = genuuid();
-        zncc_put(cc, uuid, td);
-        zncc_get(cc, uuid, NULL);
+        // zncc_put(cc, uuid, td);
+        zncc_get(cc, uuid, 0, 0, NULL);
         free(uuid);
     }
     free(td);
@@ -67,6 +67,7 @@ main(int argc, char **argv) {
     int fd = 0;
     char *device = NULL;
     char *chunk_size_str = NULL;
+    char *config = NULL;
     uint64_t chunk_size_int;
     int c;
     zncc_chunkcache cc;
@@ -78,13 +79,16 @@ main(int argc, char **argv) {
 
     opterr = 0;
 
-    while ((c = getopt(argc, argv, "d:c:")) != -1) {
+    while ((c = getopt(argc, argv, "d:s:c:")) != -1) {
         switch (c) {
             case 'd':
                 device = optarg;
                 break;
-            case 'c':
+            case 's':
                 chunk_size_str = optarg;
+                break;
+            case 'c':
+                config = optarg;
                 break;
             case '?':
                 if (optopt == 'd') {
@@ -105,6 +109,11 @@ main(int argc, char **argv) {
     }
 
     if (chunk_size_str == NULL) {
+        fprintf(stderr, "Option -s is a required flag.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (config == NULL) {
         fprintf(stderr, "Option -c is a required flag.\n");
         exit(EXIT_FAILURE);
     }
@@ -118,13 +127,28 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    char *key;
+    char *secret;
+    char *bucket;
+
+    ret = read_credentials(config, &key, &secret, &bucket);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to read credentials from %s.\n", config);
+        exit(EXIT_FAILURE);
+    }
+
+    zncc_s3 s3;
+    zncc_s3_init(&s3, bucket, key, secret, 512);
+
+    ret = zncc_s3_get(&s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
+
     ret = zncc_init(&cc, device, chunk_size_int);
     if (ret != 0) {
         fprintf(stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
 
-    test_put(&cc);
+    // test_put(&cc);
 
     zncc_destroy(&cc);
 

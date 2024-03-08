@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define UUID_SIZE 37
 
@@ -12,6 +13,10 @@ char *
 genuuid();
 int
 string_to_uint64(char const *const str, uint64_t *num);
+char *
+read_file_to_string(char const *filename);
+int
+read_credentials(const char *filename, char **key, char **secret, char **bucket);
 
 /* Will only print messages (to stdout) when DEBUG is defined */
 #ifdef DEBUG

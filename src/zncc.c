@@ -200,7 +200,7 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
 }
 
 int
-zncc_get(zncc_chunkcache *cc, char const *const uuid, char **data) {
+zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t size, char **data) {
 
     dbg_printf("Get: uuid=%s\n", uuid);
     uint32_t bucket;
@@ -213,7 +213,10 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, char **data) {
 
     zncc_chunk_info data_out;
 
-    zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, &data_out);
+    if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, &data_out) != 0) {
+        // No match, go to s3
+        // TODO cache chunk
+    }
 
     dbg_printf("Found chunk (uuid=%s, zone=%u, chunk=%u)\n", data_out.uuid, data_out.zone,
                data_out.chunk);

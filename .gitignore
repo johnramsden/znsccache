@@ -1,2 +1,3 @@
 *.o
 src/znsccache
+/credentials.json

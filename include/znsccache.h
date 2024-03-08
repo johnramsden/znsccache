@@ -3,6 +3,7 @@
 
 #include "util.h"
 
+#include <libs3.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -43,6 +44,33 @@ zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_ch
 int
 zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chunk_info *data_out);
 
+// s3
+// Callback data structure
+typedef struct zncc_get_object_callback_data {
+    char *buffer;
+    size_t buffer_size;
+    size_t buffer_position;
+} zncc_get_object_callback_data;
+
+typedef struct zncc_s3 {
+    char *bucket_name;
+    char *access_key_id;
+    char *secret_access_key;
+    S3Status status;
+    S3BucketContext bucket_context;
+    S3GetConditions get_conditions;
+    S3GetObjectHandler get_object_handler;
+    zncc_get_object_callback_data callback_data;
+} zncc_s3;
+
+void
+zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_access_key,
+             size_t buffer_sz);
+void
+zncc_s3_destroy(zncc_s3 *ctx);
+int
+zncc_s3_get(zncc_s3 *ctx, char const *obj_id);
+
 // CACHE
 
 typedef struct zncc_chunkcache {
@@ -63,7 +91,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size);
 void
 zncc_destroy(zncc_chunkcache *cc);
 int
-zncc_get(zncc_chunkcache *cc, char const *const uuid, char **data);
+zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t size, char **data);
 int
 zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data);
 int

@@ -11,12 +11,12 @@ endif
 ODIR=obj
 LDIR =-L/data/john/libs/lib
 
-LIBS=-lm -lzbd -lgpg-error -luuid `libgcrypt-config --cflags --libs`
+LIBS=-lm -lzbd -lgpg-error -luuid -ls3 -lcjson `libgcrypt-config --cflags --libs`
 
 _DEPS = znsccache.h util.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = znsccache.o zncc.o bucket.o util.o
+_OBJ = znsccache.o zncc.o bucket.o util.o s3.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 

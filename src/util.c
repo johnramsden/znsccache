@@ -2,10 +2,12 @@
 
 #include "znsccache.h"
 
+#include <cjson/cJSON.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <uuid/uuid.h>
 
 /**
@@ -51,4 +53,75 @@ string_to_uint64(char const *const str, uint64_t *num) {
     dbg_printf("Failed to convert %s to uint64_t\n", str);
 
     return -1;
+}
+
+char *
+read_file_to_string(const char *file_name) {
+    FILE *f = fopen(file_name, "rb");
+    if (f == NULL) {
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *data = malloc(length + 1);
+    if (data != NULL) {
+        fread(data, 1, length, f);
+        data[length] = '\0';
+    }
+    fclose(f);
+    return data;
+}
+
+int
+read_credentials(const char *filename, char **key, char **secret, char **bucket) {
+    int ret = 0;
+    char *json_data = read_file_to_string(filename);
+    if (json_data == NULL) {
+        fprintf(stderr, "Unable to read file %s\n", filename);
+        return -1;
+    }
+
+    cJSON *json = cJSON_Parse(json_data);
+    if (json == NULL) {
+        char const *error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL) {
+            fprintf(stderr, "Error before: %s\n", error_ptr);
+        }
+        free(json_data);
+        return -1;
+    }
+
+    const cJSON *access_key_id = cJSON_GetObjectItemCaseSensitive(json, "key");
+    const cJSON *secret_access_key = cJSON_GetObjectItemCaseSensitive(json, "secret");
+    const cJSON *json_bucket = cJSON_GetObjectItemCaseSensitive(json, "bucket");
+
+    if (cJSON_IsString(access_key_id) && (access_key_id->valuestring != NULL) &&
+        cJSON_IsString(secret_access_key) && (secret_access_key->valuestring != NULL) &&
+        cJSON_IsString(json_bucket) && (json_bucket->valuestring != NULL)) {
+        *key = malloc(strlen(access_key_id->valuestring) + 1);
+        if (*key == NULL) {
+            nomem();
+        }
+        *secret = malloc(strlen(secret_access_key->valuestring) + 1);
+        if (*secret == NULL) {
+            nomem();
+        }
+        *bucket = malloc(strlen(json_bucket->valuestring) + 1);
+        if (*bucket == NULL) {
+            nomem();
+        }
+        strcpy(*key, access_key_id->valuestring);
+        strcpy(*secret, secret_access_key->valuestring);
+        strcpy(*bucket, json_bucket->valuestring);
+        ret = 0;
+    } else {
+        fprintf(stderr, "Invalid JSON: Required fields are missing.\n");
+        ret = -1;
+    }
+
+    cJSON_Delete(json);
+    free(json_data);
 }
