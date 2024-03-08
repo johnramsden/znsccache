@@ -140,13 +140,13 @@ main(int argc, char **argv) {
     zncc_s3 s3;
     zncc_s3_init(&s3, bucket, key, secret, 512);
 
-    ret = zncc_s3_get(&s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
-
-    ret = zncc_init(&cc, device, chunk_size_int);
+    ret = zncc_init(&cc, device, chunk_size_int, &s3);
     if (ret != 0) {
         fprintf(stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
+
+    ret = zncc_s3_get(cc.s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
 
     // test_put(&cc);
 

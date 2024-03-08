@@ -314,7 +314,7 @@ populate_free_list(zncc_chunkcache *cc) {
  * @return int           Non-zero on error
  */
 int
-zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size) {
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3) {
     int ret = 0;
     struct zbd_info info;
 
@@ -337,6 +337,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size) {
         goto cleanup;
     }
 
+    cc->s3 = s3;
     cc->zones_total = info.nr_zones;
     cc->device = device;
     cc->chunk_size = chunk_size;
