@@ -69,7 +69,7 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
 void
 zncc_s3_destroy(zncc_s3 *ctx);
 int
-zncc_s3_get(zncc_s3 *ctx, char const *obj_id);
+zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte_count);
 
 // CACHE
 
@@ -85,8 +85,8 @@ typedef struct zncc_chunkcache {
     zncc_s3 *s3;
 } zncc_chunkcache;
 
-int
-zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data);
+// int
+// zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data);
 int
 zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3);
 void

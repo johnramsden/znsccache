@@ -30,8 +30,6 @@ copy_s3_str(char **out, char const *in) {
     return 0;
 }
 
-// This callback does the same thing for every request type: prints out the
-// properties if the user has requested them to be so
 static S3Status
 responsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData) {
     return S3StatusOK;
@@ -97,11 +95,12 @@ zncc_s3_destroy(zncc_s3 *ctx) {
 }
 
 int
-zncc_s3_get(zncc_s3 *ctx, char const *obj_id) {
+zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte_count) {
 
     dbg_printf("get(%s)\n", obj_id);
     int ret = 0;
-    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions, 0, 0, NULL,
+    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions,
+                  start_byte, byte_count, NULL,
                   &ctx->get_object_handler, &ctx->callback_data);
 
     // Check if the buffer_position is less than buffer_size to ensure there was no overflow
