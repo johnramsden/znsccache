@@ -99,8 +99,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
 
     dbg_printf("get(%s)\n", obj_id);
     int ret = 0;
-    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions,
-                  start_byte, byte_count, NULL,
+    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions, start_byte, byte_count, NULL,
                   &ctx->get_object_handler, &ctx->callback_data);
 
     // Check if the buffer_position is less than buffer_size to ensure there was no overflow
@@ -110,6 +109,8 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
         fprintf(stderr, "Buffer overflow detected.\n");
         ret = -1;
     }
+
+    ctx->callback_data.buffer_position = 0;
 
     if (ctx->status != S3StatusOK) {
         fprintf(stderr, "S3 get object error: %d\n", ctx->status);

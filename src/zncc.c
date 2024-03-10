@@ -198,7 +198,8 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
 }
 
 static int
-setup_intermediate_uuid(__uuid_intermediate * intermediate_uuid, char const *const uuid, off_t offset) {
+setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *const uuid,
+                        off_t offset) {
     uint32_t hash;
     int ret = crc32_hash(uuid, strlen(uuid), &intermediate_uuid->uuid_hash);
     if (ret != 0) {
@@ -211,10 +212,52 @@ setup_intermediate_uuid(__uuid_intermediate * intermediate_uuid, char const *con
 }
 
 /**
+ * @brief Place an item in the cache
+ *
+ * @param cc    Chunk cache instance
+ * @param uuid  Chunk unique ID
+ * @param data  Buffer containing data
+ * @return int  Non-zero on error
+ */
+static int
+zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid, off_t offset,
+                   uint32_t valid_size, char *data) {
+    int ret = 0;
+    // Get free chunk
+    zncc_chunk_info zi;
+    ret = zncc_bucket_pop_back(&cc->free_list, &zi);
+    if (ret != 0) {
+        dbg_printf("Cache full, length=%u\n", cc->free_list.length);
+        // TODO
+        return -1;
+    }
+    dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
+
+    strcpy(zi.uuid, uuid);
+    zi.offset = offset;
+    zi.valid_size = valid_size;
+
+    // Add to bucket
+    zncc_bucket_push_front(&cc->buckets[bucket], zi);
+
+    ret = zncc_write_chunk(cc, zi, data);
+    if (ret != 0) {
+        return ret;
+    }
+
+    // Set allocated
+    cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
+
+    print_bucket(&cc->buckets[bucket], bucket);
+
+    return 0;
+}
+
+/**
  * @brief
  *
  * @param cc
- * @param uuid   UUID string (MAX 64 bytes)
+ * @param uuid   UUID string (MAX 37 bytes with \0)
  * @param offset
  * @param size
  * @param data
@@ -233,7 +276,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     ret = setup_intermediate_uuid(&intermediate_uuid, uuid, offset);
 
     uint32_t hash;
-    ret = crc32_hash((char *)&intermediate_uuid, sizeof(intermediate_uuid), &hash);
+    ret = crc32_hash((char *) &intermediate_uuid, sizeof(intermediate_uuid), &hash);
     if (ret != 0) {
         return ret;
     }
@@ -244,62 +287,23 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
     zncc_chunk_info data_out;
 
-    if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, &data_out) != 0) {
+    if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, offset, &data_out) != 0) {
         ret = zncc_s3_get(cc->s3, uuid, offset, size);
+        if (ret != 0) {
+            dbg_printf("S3 get failed: uuid=%s, bucket=%u\n", uuid, bucket);
+            return ret;
+        }
+        ret = zncc_put_in_bucket(cc, bucket, uuid, offset, size, cc->s3->callback_data.buffer);
+        if (ret != 0) {
+            dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
+            return ret;
+        }
     }
 
-    dbg_printf("Found chunk (uuid=%s, zone=%u, chunk=%u)\n", data_out.uuid, data_out.zone,
-               data_out.chunk);
-
     // TODO data
+
+    return ret;
 }
-
-// /**
-//  * @brief Place an item in the cache
-//  *
-//  * @param cc    Chunk cache instance
-//  * @param uuid  Chunk unique ID
-//  * @param data  Buffer containing data
-//  * @return int  Non-zero on error
-//  */
-// int
-// zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data) {
-//     uint32_t bucket;
-//     int ret = find_bucket(uuid, cc->chunks_total, &bucket);
-//     if (ret != 0) {
-//         return ret;
-//     }
-
-//     dbg_printf("Put: uuid=%s\n", uuid);
-//     dbg_printf("Found bucket: %u\n", bucket);
-
-//     // Get free chunk
-//     zncc_chunk_info zi;
-//     ret = zncc_bucket_pop_back(&cc->free_list, &zi);
-//     if (ret != 0) {
-//         dbg_printf("Cache full, length=%u\n", cc->free_list.length);
-//         // TODO
-//         return -1;
-//     }
-//     dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
-
-//     strcpy(zi.uuid, uuid);
-
-//     // Add to bucket
-//     zncc_bucket_push_front(&cc->buckets[bucket], zi);
-
-//     ret = zncc_write_chunk(cc, zi, data);
-//     if (ret != 0) {
-//         return ret;
-//     }
-
-//     // Set allocated
-//     cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
-
-//     print_bucket(&cc->buckets[bucket], bucket);
-
-//     return 0;
-// }
 
 /**
  * @brief Calculate number of chunks for a zone

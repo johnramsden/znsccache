@@ -146,7 +146,8 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    zncc_get(&cc, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866", 0, 512*1024*1024, NULL);
+    zncc_get(&cc, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866", 0, 512 * 1024 * 1024, NULL);
+    zncc_get(&cc, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866", 0, 512 * 1024 * 1024, NULL);
 
     // ret = zncc_s3_get(cc.s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
 

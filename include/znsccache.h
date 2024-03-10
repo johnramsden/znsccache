@@ -14,7 +14,9 @@
 typedef struct zncc_chunk_info {
     char uuid[UUID_SIZE];
     uint32_t chunk;
+    uint32_t valid_size;
     uint32_t zone;
+    off_t offset;
 } zncc_chunk_info;
 
 typedef struct zncc_bucket_node {
@@ -40,9 +42,11 @@ zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out);
 void
 zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data);
 int
-zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chunk_info *data_out);
+zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
+                         zncc_chunk_info *data_out);
 int
-zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chunk_info *data_out);
+zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
+                        zncc_chunk_info *data_out);
 
 // s3
 // Callback data structure

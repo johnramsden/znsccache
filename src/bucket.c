@@ -26,10 +26,17 @@ zncc_bucket_destroy_list(zncc_bucket_list *list) {
  * @return int zero if match, nonzero on no match
  */
 int
-zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chunk_info *data_out) {
+zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
+                        zncc_chunk_info *data_out) {
     zncc_bucket_node *current = list->head;
     while (current != NULL) {
         if (strcmp(current->data.uuid, uuid) != 0) {
+            // No match
+            current = current->next;
+            continue;
+        }
+
+        if (current->data.offset != offset) {
             // No match
             current = current->next;
             continue;
@@ -68,11 +75,17 @@ zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, zncc_chu
  * @return int zero if match, nonzero on no match
  */
 int
-zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid,
+zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                          zncc_chunk_info *data_out) {
     zncc_bucket_node *current = list->head;
     while (current != NULL) {
         if (strcmp(current->data.uuid, uuid) != 0) {
+            // No match
+            current = current->next;
+            continue;
+        }
+
+        if (current->data.offset != offset) {
             // No match
             current = current->next;
             continue;
