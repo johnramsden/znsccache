@@ -157,7 +157,7 @@ main(int argc, char **argv) {
 
     dbg_printf("v1[512]=%s\n", v1);
 
-    zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
+    // zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
 
     // dbg_printf("v2[512]=%c\n", v2[512]);
 

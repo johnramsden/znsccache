@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static S3Status statusG = 0;
+
 static S3Status
 get_object_data_callback(int bufferSize, const char *buffer, void *callbackData) {
     dbg_printf("cb\n");
@@ -33,12 +35,17 @@ copy_s3_str(char **out, char const *in) {
 static S3Status
 responsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData) {
     dbg_printf("cb\n");
+
     return S3StatusOK;
 }
 
 static void
 responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *callbackData) {
-    dbg_printf("cb\n");
+    statusG = status;
+    if (error != NULL) {
+        dbg_printf("%s\n", error->message);
+    }
+    dbg_printf("status=%d\n", status);
 }
 
 /**
@@ -63,6 +70,7 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     S3_initialize("s3", S3_INIT_ALL, NULL);
 
     // Set up the bucket context
+    ctx->bucket_context.hostName = "s3.us-west-2.amazonaws.com";
     ctx->bucket_context.protocol = S3ProtocolHTTP;
     ctx->bucket_context.uriStyle = S3UriStylePath;
 
@@ -93,6 +101,8 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
         (S3ResponseHandler){&responsePropertiesCallback, &responseCompleteCallback};
 
     ctx->get_object_handler.getObjectDataCallback = &get_object_data_callback;
+
+    ctx->status = 0;
 }
 
 void
@@ -117,7 +127,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
         dbg_printf("Object fetched successfully, pos=%lu\n", ctx->callback_data.buffer_position);
     } else {
         fprintf(stderr, "Buffer overflow detected.\n");
-        ret = -1;
+        // ret = -1;
     }
 
     dbg_printf("S3 get object status: %d\n", ctx->status);
