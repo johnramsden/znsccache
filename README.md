@@ -66,13 +66,22 @@ apt install libcjson-dev
 ### znscache.small
 
 ```
-Uploaded 536870912 bytes to znscache.small with key e8ade124-f00a-47ea-aa7d-0dbd55dd0866
-Uploaded 536870912 bytes to znscache.small with key cff380c9-c5ab-441e-9932-dab22eb1b0ec
-Uploaded 536870912 bytes to znscache.small with key ba429e73-d963-41c6-9681-863f9406d2c4
-Uploaded 536870912 bytes to znscache.small with key 81cf4f93-654c-487a-90a5-e0a545a9d715
-Uploaded 536870912 bytes to znscache.small with key 1d4970a9-9138-4f2f-b42f-d0e06badd01e
-Uploaded 536870912 bytes to znscache.small with key 42f1c47b-d4ed-432f-96c6-6450cbd30ce9
-Uploaded 536870912 bytes to znscache.small with key 42ca739b-c16d-4b61-be50-949450399ce8
-Uploaded 536870912 bytes to znscache.small with key 327d518e-dc56-4919-ab61-5b814f93b441
+Uploading objects of size 268435456 random bytes to znscache.small
+6c228e61-abb7-4100-a5df-417f25b47c36, 's'
+cf752bc3-b33f-435f-ac30-178e971f54a2, 't'
+7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee, 'u'
+c3f16f76-8f94-40f1-950d-695bb226fe43, 'v'
+54b4afb0-7624-448d-9c52-ddcc56e56bf2, 'w'
+3f5d58a4-1780-46b5-bd96-d4c5b4f55b2b, 'x'
+e5a19178-6b77-40b7-9bf8-f45f70ea19a5, 'y'
+13f9c273-3f2f-486a-8003-ba2fba58b258, 'z'
+c75b2775-f71e-47f9-9500-530c8cf9f344, 'a'
+e5be69c3-6e22-4c2c-aa09-0bff9417c361, 'b'
+982aff04-b7b6-4060-a141-241af8c46375, 'c'
+62c0ae68-e637-4ddc-a0aa-aa1151f88595, 'd'
+7fc3ca1b-3968-4274-9a5b-688f01dca81b, 'e'
+b9cece7d-50ce-4f00-9abb-4e9c07ed68fd, 'f'
+7446cbb0-430b-44c4-9da9-443a044c14d1, 'g'
+8c0630ac-c4b5-4bf1-a7a3-13a7e95032dd, 'h'
 Finished uploading. Total uploaded size: 4294967296 bytes.
 ```

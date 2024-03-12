@@ -32,11 +32,13 @@ copy_s3_str(char **out, char const *in) {
 
 static S3Status
 responsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData) {
+    dbg_printf("cb\n");
     return S3StatusOK;
 }
 
 static void
 responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *callbackData) {
+    dbg_printf("cb\n");
 }
 
 /**
@@ -68,8 +70,16 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     ctx->bucket_context.accessKeyId = ctx->access_key_id;
     ctx->bucket_context.secretAccessKey = ctx->secret_access_key;
 
+    S3GetConditions getConditions =
+    {
+        .ifModifiedSince = -1,
+        .ifNotModifiedSince = -1,
+        .ifMatchETag = NULL,
+        .ifNotMatchETag = NULL
+    };
+
     // Initialize get conditions
-    memset(&ctx->get_conditions, 0, sizeof(ctx->get_conditions));
+    ctx->get_conditions = getConditions;
 
     // Initialize the callback data structure
     ctx->callback_data.buffer = malloc(buffer_sz);
@@ -99,16 +109,18 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
 
     dbg_printf("get(%s)\n", obj_id);
     int ret = 0;
-    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions, start_byte, byte_count, NULL,
+    S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions, start_byte, byte_count, 0,
                   &ctx->get_object_handler, &ctx->callback_data);
 
     // Check if the buffer_position is less than buffer_size to ensure there was no overflow
     if (ctx->callback_data.buffer_position < ctx->callback_data.buffer_size) {
-        dbg_printf("Object fetched successfully\n");
+        dbg_printf("Object fetched successfully, pos=%lu\n", ctx->callback_data.buffer_position);
     } else {
         fprintf(stderr, "Buffer overflow detected.\n");
         ret = -1;
     }
+
+    dbg_printf("S3 get object status: %d\n", ctx->status);
 
     ctx->callback_data.buffer_position = 0;
 

@@ -237,16 +237,21 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
     zi.offset = offset;
     zi.valid_size = valid_size;
 
-    // Add to bucket
-    zncc_bucket_push_front(&cc->buckets[bucket], zi);
-
     ret = zncc_write_chunk(cc, zi, data);
     if (ret != 0) {
         return ret;
     }
 
+    // Add to bucket
+    zncc_bucket_push_front(&cc->buckets[bucket], zi);
+
     // Set allocated
     cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
+
+    // Add next chunk in zone to free list
+    if (zi.chunk < (cc->chunks_per_zone-1)) {
+        zncc_bucket_push_back(&cc->free_list, (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
+    }
 
     print_bucket(&cc->buckets[bucket], bucket);
 
@@ -298,6 +303,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
             return ret;
         }
+        *data = cc->s3->callback_data.buffer;
     }
 
     // TODO data

@@ -146,8 +146,22 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    zncc_get(&cc, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866", 0, 512 * 1024 * 1024, NULL);
-    zncc_get(&cc, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866", 0, 512 * 1024 * 1024, NULL);
+    size_t xf = 512 * 1024;
+
+    char * v1;
+    char * v2;
+
+    zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v1);
+
+    v1[512] = '\0';
+
+    dbg_printf("v1[512]=%s\n", v1);
+
+    zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
+
+    // dbg_printf("v2[512]=%c\n", v2[512]);
+
+    // dbg_printf("v2[0]=%s\n", v2[0]);
 
     // ret = zncc_s3_get(cc.s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
 
