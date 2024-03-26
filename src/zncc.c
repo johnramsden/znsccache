@@ -9,6 +9,7 @@
 #include <libzbd/zbd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 typedef struct __uuid_intermediate {
     uint32_t uuid_hash;
@@ -28,6 +29,74 @@ zncc_destroy(zncc_chunkcache *cc) {
     free(cc->buckets);
     zncc_bucket_destroy_list(&cc->free_list);
     free(cc->allocated);
+}
+
+/**
+ * @brief Read a chunk from a zone
+ *
+ * @param cc         chunk cache
+ * @param chunk_info chunk location to read from to
+ * @param data       Data to write
+ * @return int       Non-zero on error
+ */
+int
+zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
+    struct zbd_info info;
+
+    int ret = 0;
+
+    int fd = zbd_open(cc->device, O_RDWR, &info);
+    if (fd < 0) {
+        fprintf(stderr, "Error opening device: %s\n", cc->device);
+        return fd;
+    }
+
+    // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
+    // capacity will be reported.
+    off_t ofst = 0;
+    off_t len = 0;
+    size_t sz = info.nr_zones * (sizeof(struct zbd_zone));
+    struct zbd_zone *zones = malloc(sz);
+    if (zones == NULL) {
+        fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
+        return -1;
+    }
+    unsigned int nr_zones = info.nr_zones;
+    ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't report zone info\n");
+        return ret;
+    }
+
+    unsigned long long wp = CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone);
+
+    dbg_printf("zone %u write pointer: %llu\n", chunk_info.zone, wp);
+
+    // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+
+    // write to fd at offset 0
+
+    *data = malloc(cc->chunk_size);
+    if (*data == NULL) {
+        ret = -1;
+        goto cleanup;
+    }
+    size_t b = pread(fd, *data, cc->chunk_size, wp);
+    if (b != cc->chunk_size) {
+        fprintf(stderr, "Couldn't read from fd\n");
+        free(*data);
+        ret = -1;
+        goto cleanup;
+    }
+
+    // (*data)[512] = '\0';
+
+    // dbg_printf("Read %s from fd\n", *data);
+
+cleanup:
+    zbd_close(fd);
+    free(zones);
+    return ret;
 }
 
 /**
@@ -67,7 +136,7 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         return ret;
     }
 
-    printf("zone %u write pointer: %llu\n", chunk_info.zone, zones[chunk_info.zone].wp);
+    dbg_printf("zone %u write pointer: %llu\n", chunk_info.zone, zones[chunk_info.zone].wp);
 
     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
 
@@ -80,33 +149,14 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         goto cleanup;
     }
 
-    char *buf = malloc(cc->chunk_size);
-    if (buf == NULL) {
-        ret = -1;
-        goto cleanup;
-    }
-    b = pread(fd, buf, cc->chunk_size, zones[chunk_info.zone].wp);
-    if (b != cc->chunk_size) {
-        fprintf(stderr, "Couldn't read from fd\n");
-        ret = -1;
-        goto cleanup;
-    }
-    if (strcmp(data, buf)) {
-        fprintf(stderr, "data(%s) != buf(%s)\n", data, buf);
-        ret = -1;
-        goto cleanup;
-    }
-    printf("Read %s from fd\n", buf);
+    assert(
+        CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone)
+         == zones[chunk_info.zone].wp);
 
 cleanup:
-    free(buf);
     zbd_close(fd);
     free(zones);
     return ret;
-}
-
-int
-zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
 }
 
 /**
@@ -246,7 +296,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
     zncc_bucket_push_front(&cc->buckets[bucket], zi);
 
     // Set allocated
-    cc->allocated[ABSOLUTE_CHUNK(zi.zone, zi.chunk)] = 1;
+    cc->allocated[ABSOLUTE_CHUNK(cc->chunks_per_zone, zi.zone, zi.chunk)] = 1;
 
     // Add next chunk in zone to free list
     if (zi.chunk < (cc->chunks_per_zone-1)) {
@@ -304,9 +354,10 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             return ret;
         }
         *data = cc->s3->callback_data.buffer;
+    } else {
+        dbg_printf("Read from chunk\n");
+        ret = zncc_read_chunk(cc, data_out, data);
     }
-
-    // TODO data
 
     return ret;
 }
@@ -378,6 +429,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     }
 
     cc->s3 = s3;
+    cc->zone_size = info.zone_size;
     cc->zones_total = info.nr_zones;
     cc->device = device;
     cc->chunk_size = chunk_size;

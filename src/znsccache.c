@@ -130,15 +130,16 @@ main(int argc, char **argv) {
     char *key;
     char *secret;
     char *bucket;
+    char *host_name;
 
-    ret = read_credentials(config, &key, &secret, &bucket);
+    ret = read_credentials(config, &key, &secret, &bucket, &host_name);
     if (ret != 0) {
         fprintf(stderr, "Failed to read credentials from %s.\n", config);
         exit(EXIT_FAILURE);
     }
 
     zncc_s3 s3;
-    zncc_s3_init(&s3, bucket, key, secret, 512);
+    zncc_s3_init(&s3, bucket, key, secret, host_name, 512);
 
     ret = zncc_init(&cc, device, chunk_size_int, &s3);
     if (ret != 0) {
@@ -151,15 +152,19 @@ main(int argc, char **argv) {
     char * v1;
     char * v2;
 
-    zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v1);
+    ret = zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v1);
+    ret = zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
 
-    v1[512] = '\0';
+    if (ret != 0){
+        exit(EXIT_FAILURE);
+    }
 
-    dbg_printf("v1[512]=%s\n", v1);
+    // v1[512] = '\0';
+    // dbg_printf("v1[512]=%s\n", v1);
 
-    // zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
+    // // zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
 
-    // dbg_printf("v2[512]=%c\n", v2[512]);
+    // dbg_printf("v2[512]=%s\n", v2);
 
     // dbg_printf("v2[0]=%s\n", v2[0]);
 

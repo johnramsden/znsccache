@@ -60,6 +60,7 @@ typedef struct zncc_s3 {
     char *bucket_name;
     char *access_key_id;
     char *secret_access_key;
+    char *host_name;
     S3Status status;
     S3BucketContext bucket_context;
     S3GetConditions get_conditions;
@@ -69,7 +70,7 @@ typedef struct zncc_s3 {
 
 void
 zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_access_key,
-             size_t buffer_sz);
+             char *host_name, size_t buffer_sz);
 void
 zncc_s3_destroy(zncc_s3 *ctx);
 int
@@ -78,6 +79,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
 // CACHE
 
 typedef struct zncc_chunkcache {
+    uint32_t zone_size;
     uint32_t chunk_size;
     uint32_t chunks_total;
     uint32_t chunks_per_zone;

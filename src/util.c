@@ -76,7 +76,7 @@ read_file_to_string(const char *file_name) {
 }
 
 int
-read_credentials(const char *filename, char **key, char **secret, char **bucket) {
+read_credentials(const char *filename, char **key, char **secret, char **bucket, char **host_name) {
     int ret = 0;
     char *json_data = read_file_to_string(filename);
     if (json_data == NULL) {
@@ -97,10 +97,12 @@ read_credentials(const char *filename, char **key, char **secret, char **bucket)
     const cJSON *access_key_id = cJSON_GetObjectItemCaseSensitive(json, "key");
     const cJSON *secret_access_key = cJSON_GetObjectItemCaseSensitive(json, "secret");
     const cJSON *json_bucket = cJSON_GetObjectItemCaseSensitive(json, "bucket");
+    const cJSON *json_host_name = cJSON_GetObjectItemCaseSensitive(json, "host_name");
 
     if (cJSON_IsString(access_key_id) && (access_key_id->valuestring != NULL) &&
         cJSON_IsString(secret_access_key) && (secret_access_key->valuestring != NULL) &&
-        cJSON_IsString(json_bucket) && (json_bucket->valuestring != NULL)) {
+        cJSON_IsString(json_bucket) && (json_bucket->valuestring != NULL) &&
+        cJSON_IsString(json_host_name) && (json_host_name->valuestring != NULL)) {
         *key = malloc(strlen(access_key_id->valuestring) + 1);
         if (*key == NULL) {
             nomem();
@@ -113,9 +115,18 @@ read_credentials(const char *filename, char **key, char **secret, char **bucket)
         if (*bucket == NULL) {
             nomem();
         }
+        *bucket = malloc(strlen(json_bucket->valuestring) + 1);
+        if (*bucket == NULL) {
+            nomem();
+        }
+        *host_name = malloc(strlen(json_host_name->valuestring) + 1);
+        if (*host_name == NULL) {
+            nomem();
+        }
         strcpy(*key, access_key_id->valuestring);
         strcpy(*secret, secret_access_key->valuestring);
         strcpy(*bucket, json_bucket->valuestring);
+        strcpy(*host_name, json_host_name->valuestring);
         ret = 0;
     } else {
         fprintf(stderr, "Invalid JSON: Required fields are missing.\n");

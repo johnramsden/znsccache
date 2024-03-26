@@ -8,7 +8,6 @@ static S3Status statusG = 0;
 
 static S3Status
 get_object_data_callback(int bufferSize, const char *buffer, void *callbackData) {
-    dbg_printf("cb\n");
     zncc_get_object_callback_data *data = (zncc_get_object_callback_data *) callbackData;
     size_t bytes_to_copy = (data->buffer_size - data->buffer_position > bufferSize) ?
                                bufferSize :
@@ -34,8 +33,6 @@ copy_s3_str(char **out, char const *in) {
 
 static S3Status
 responsePropertiesCallback(const S3ResponseProperties *properties, void *callbackData) {
-    dbg_printf("cb\n");
-
     return S3StatusOK;
 }
 
@@ -55,12 +52,13 @@ responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *cal
  * @param bucket_name       Name of S3 bucket (ownership transferred to ctx)
  * @param access_key_id     Id of S3 key (ownership transferred to ctx)
  * @param secret_access_key Secret S3 key (ownership transferred to ctx)
+ * @param host_name         S3 Host
  * @param buffer_sz         Size of calls to s3 bucket
  * @return int              Non-zero on error
  */
 void
 zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_access_key,
-             size_t buffer_sz) {
+            char *host_name, size_t buffer_sz) {
 
     ctx->access_key_id = access_key_id;
     ctx->secret_access_key = secret_access_key;
@@ -70,7 +68,7 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     S3_initialize("s3", S3_INIT_ALL, NULL);
 
     // Set up the bucket context
-    ctx->bucket_context.hostName = "s3.us-west-2.amazonaws.com";
+    ctx->bucket_context.hostName = host_name;
     ctx->bucket_context.protocol = S3ProtocolHTTP;
     ctx->bucket_context.uriStyle = S3UriStylePath;
 
@@ -117,22 +115,26 @@ zncc_s3_destroy(zncc_s3 *ctx) {
 int
 zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte_count) {
 
+    statusG = S3StatusOK;
+
     dbg_printf("get(%s)\n", obj_id);
     int ret = 0;
     S3_get_object(&ctx->bucket_context, obj_id, &ctx->get_conditions, start_byte, byte_count, 0,
                   &ctx->get_object_handler, &ctx->callback_data);
 
     // Check if the buffer_position is less than buffer_size to ensure there was no overflow
-    if (ctx->callback_data.buffer_position < ctx->callback_data.buffer_size) {
+    if (ctx->callback_data.buffer_position <= ctx->callback_data.buffer_size) {
         dbg_printf("Object fetched successfully, pos=%lu\n", ctx->callback_data.buffer_position);
     } else {
-        fprintf(stderr, "Buffer overflow detected.\n");
-        // ret = -1;
+        fprintf(stderr, "Buffer overflow detected. pos=%lu, size=%lu\n",
+        ctx->callback_data.buffer_position, ctx->callback_data.buffer_size);
+        ret = -1;
     }
 
     dbg_printf("S3 get object status: %d\n", ctx->status);
 
     ctx->callback_data.buffer_position = 0;
+    ctx->status = statusG;
 
     if (ctx->status != S3StatusOK) {
         fprintf(stderr, "S3 get object error: %d\n", ctx->status);
