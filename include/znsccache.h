@@ -104,4 +104,8 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data);
 int
 zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data);
 
+void
+print_bucket(zncc_bucket_list *bucket, uint32_t b_num);
+void
+print_free_list(zncc_bucket_list *bucket);
 #endif

@@ -58,7 +58,7 @@ responseCompleteCallback(S3Status status, const S3ErrorDetails *error, void *cal
  */
 void
 zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_access_key,
-            char *host_name, size_t buffer_sz) {
+             char *host_name, size_t buffer_sz) {
 
     ctx->access_key_id = access_key_id;
     ctx->secret_access_key = secret_access_key;
@@ -76,13 +76,10 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     ctx->bucket_context.accessKeyId = ctx->access_key_id;
     ctx->bucket_context.secretAccessKey = ctx->secret_access_key;
 
-    S3GetConditions getConditions =
-    {
-        .ifModifiedSince = -1,
-        .ifNotModifiedSince = -1,
-        .ifMatchETag = NULL,
-        .ifNotMatchETag = NULL
-    };
+    S3GetConditions getConditions = {.ifModifiedSince = -1,
+                                     .ifNotModifiedSince = -1,
+                                     .ifMatchETag = NULL,
+                                     .ifNotMatchETag = NULL};
 
     // Initialize get conditions
     ctx->get_conditions = getConditions;
@@ -127,7 +124,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
         dbg_printf("Object fetched successfully, pos=%lu\n", ctx->callback_data.buffer_position);
     } else {
         fprintf(stderr, "Buffer overflow detected. pos=%lu, size=%lu\n",
-        ctx->callback_data.buffer_position, ctx->callback_data.buffer_size);
+                ctx->callback_data.buffer_position, ctx->callback_data.buffer_size);
         ret = -1;
     }
 

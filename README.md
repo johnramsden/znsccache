@@ -85,3 +85,9 @@ b9cece7d-50ce-4f00-9abb-4e9c07ed68fd, 'f'
 8c0630ac-c4b5-4bf1-a7a3-13a7e95032dd, 'h'
 Finished uploading. Total uploaded size: 4294967296 bytes.
 ```
+
+## TODO
+
+
+* Eviction (foreground)
+* Add SSD backend

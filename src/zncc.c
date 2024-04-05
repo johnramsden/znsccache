@@ -1,5 +1,6 @@
 #include "znsccache.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -9,7 +10,32 @@
 #include <libzbd/zbd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
+
+void
+print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
+    zncc_bucket_node *b = bucket->head;
+    while (1) {
+        if (b == NULL) {
+            break;
+        }
+        printf("[b=%u] (zone=%u,chunk=%u,uuid=%s)\n", b_num, b->data.zone, b->data.chunk,
+               b->data.uuid);
+        b = b->next;
+    }
+}
+
+void
+print_free_list(zncc_bucket_list *bucket) {
+    printf("Free List\n");
+    zncc_bucket_node *b = bucket->head;
+    while (1) {
+        if (b == NULL) {
+            break;
+        }
+        printf("(zone=%u,chunk=%u)\n", b->data.zone, b->data.chunk);
+        b = b->next;
+    }
+}
 
 typedef struct __uuid_intermediate {
     uint32_t uuid_hash;
@@ -68,7 +94,8 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
         return ret;
     }
 
-    unsigned long long wp = CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone);
+    unsigned long long wp =
+        CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone);
 
     dbg_printf("zone %u write pointer: %llu\n", chunk_info.zone, wp);
 
@@ -149,9 +176,8 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         goto cleanup;
     }
 
-    assert(
-        CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone)
-         == zones[chunk_info.zone].wp);
+    assert(CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone) ==
+           zones[chunk_info.zone].wp);
 
 cleanup:
     zbd_close(fd);
@@ -233,20 +259,6 @@ find_bucket(uint32_t hash, uint32_t num_chunks) {
     return hash % num_chunks;
 }
 
-static void
-print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
-    zncc_bucket_node *b = bucket->head;
-    printf("Bucket=%u: ", b_num);
-    while (1) {
-        if (b == NULL) {
-            break;
-        }
-        printf("(zone=%u,chunk=%u), ", b->data.zone, b->data.chunk);
-        b = b->next;
-    }
-    printf("\n");
-}
-
 static int
 setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *const uuid,
                         off_t offset) {
@@ -278,7 +290,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
     ret = zncc_bucket_pop_back(&cc->free_list, &zi);
     if (ret != 0) {
         dbg_printf("Cache full, length=%u\n", cc->free_list.length);
-        // TODO
+        // TODO: Evict
         return -1;
     }
     dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
@@ -299,11 +311,11 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
     cc->allocated[ABSOLUTE_CHUNK(cc->chunks_per_zone, zi.zone, zi.chunk)] = 1;
 
     // Add next chunk in zone to free list
-    if (zi.chunk < (cc->chunks_per_zone-1)) {
-        zncc_bucket_push_back(&cc->free_list, (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
+    if (zi.chunk < (cc->chunks_per_zone - 1)) {
+        zncc_bucket_push_front(&cc->free_list,
+                               (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
+        print_free_list(&cc->free_list);
     }
-
-    print_bucket(&cc->buckets[bucket], bucket);
 
     return 0;
 }
@@ -430,9 +442,14 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
 
     cc->s3 = s3;
     cc->zone_size = info.zone_size;
-    cc->zones_total = info.nr_zones;
     cc->device = device;
     cc->chunk_size = chunk_size;
+    cc->zones_total = info.nr_zones;
+
+    // TEST
+    cc->zones_total = 2;
+    // TEST FIN
+
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
 
     uint32_t sz_allocated = cc->chunks_total * sizeof(uint32_t);
