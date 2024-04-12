@@ -8,6 +8,7 @@
 #include <libzbd/zbd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /**
  * https://github.com/westerndigitalcorporation/libzbd/blob/master/include/libzbd/zbd.h
@@ -51,7 +52,7 @@ test_ll(zncc_chunkcache *cc) {
 void
 test_get(zncc_chunkcache *cc) {
     int ret;
-    size_t xf = 512 * 1024;
+    size_t xf = 4096*1024;
     char *test[GET_T_SZ][2] = {{"6c228e61-abb7-4100-a5df-417f25b47c36", "s"},
                                {"cf752bc3-b33f-435f-ac30-178e971f54a2", "t"},
                                {"7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee", "u"},
@@ -77,9 +78,75 @@ test_get(zncc_chunkcache *cc) {
             dbg_printf("Err for uuid=%s, c=%s\n", test[i][0], test[i][1]);
         }
     }
-    for (int i = 0; i < cc->chunks_total; i++) {
-        print_bucket(&cc->buckets[i], i);
+    // for (int i = 0; i < cc->chunks_total; i++) {
+    //     print_bucket(&cc->buckets[i], i);
+    // }
+}
+
+static int
+basic_write_test(char * device) {
+    int ret = 0;
+    struct zbd_info info;
+    int fd = zbd_open(device, O_RDWR, &info);
+    if (fd < 0) {
+        fprintf(stderr, "Error opening device: %s\n", device);
+        return fd;
     }
+
+    print_zbd_info(&info);
+    // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
+    // capacity will be reported.
+    off_t ofst = 0;
+    off_t len = 0;
+    size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
+    struct zbd_zone *zones = malloc(sz);
+    if (zones == NULL) {
+        fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
+        return -1;
+    }
+    unsigned int nr_zones = info.nr_zones;
+    ret = zbd_report_zones(fd, ofst, len,
+                            ZBD_RO_ALL, zones, &nr_zones);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't report zone info\n");
+        return ret;
+    }
+
+    printf("zone %u write pointer: %llu\n", 0, zones[0].wp);
+
+    // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+
+    // write to fd at offset 0
+
+    ret = zbd_reset_zones(fd, 0, 0);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't reset zones\n");
+        goto cleanup;
+    }
+
+    size_t to_write = 512*1024*1024;
+    char * buffer = malloc(to_write);
+    ssize_t bytes_written;
+    size_t total_written = 0;
+    ssize_t chunk_size = 4096; // Size of each write, e.g., 4 KiB
+
+    while (total_written < to_write) {
+        bytes_written = pwrite(fd, buffer + total_written, chunk_size, zones[0].wp);
+        dbg_printf("Wrote %ld bytes to fd\n", bytes_written);
+        if (bytes_written == -1) {
+            fprintf(stderr, "Error: %s\n", strerror(errno));
+            fprintf(stderr, "Couldn't write to fd\n");
+            ret = -1;
+            goto cleanup;
+        }
+        total_written += bytes_written;
+        dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
+    }
+
+cleanup:
+    zbd_close(fd);
+    free(zones);
+    free(buffer);
 }
 
 int
@@ -160,7 +227,7 @@ main(int argc, char **argv) {
     }
 
     zncc_s3 s3;
-    zncc_s3_init(&s3, bucket, key, secret, host_name, 512);
+    zncc_s3_init(&s3, bucket, key, secret, host_name, 8192*1024);
 
     ret = zncc_init(&cc, device, chunk_size_int, &s3);
     if (ret != 0) {
@@ -168,85 +235,24 @@ main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    // basic_write_test(device);
+
     test_get(&cc);
 
-    // v1[512] = '\0';
-    // dbg_printf("v1[512]=%s\n", v1);
+    // // v1[512] = '\0';
+    // // dbg_printf("v1[512]=%s\n", v1);
 
-    // // zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
+    // // // zncc_get(&cc, "54b4afb0-7624-448d-9c52-ddcc56e56bf2", 0, xf, &v2);
 
-    // dbg_printf("v2[512]=%s\n", v2);
+    // // dbg_printf("v2[512]=%s\n", v2);
 
-    // dbg_printf("v2[0]=%s\n", v2[0]);
+    // // dbg_printf("v2[0]=%s\n", v2[0]);
 
-    // ret = zncc_s3_get(cc.s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
+    // // ret = zncc_s3_get(cc.s3, "e8ade124-f00a-47ea-aa7d-0dbd55dd0866");
 
-    // test_put(&cc);
+    // // test_put(&cc);
 
     zncc_destroy(&cc);
 
-    //     struct zbd_info info;
-
-    //     fd = zbd_open(DEVICE, O_RDWR, &info);
-    //     if (fd < 0) {
-    //         fprintf(stderr, "Error opening device: %s\n", DEVICE);
-    //         return fd;
-    //     }
-
-    //     print_zbd_info(&info);
-    //     // If len is 0, at most nr_zones zones starting from ofst up to the end on the device
-    //     // capacity will be reported.
-    //     off_t ofst = 0;
-    //     off_t len = 0;
-    //     size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
-    //     struct zbd_zone *zones = malloc(sz);
-    //     if (zones == NULL) {
-    //         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
-    //         return -1;
-    //     }
-    //     unsigned int nr_zones = info.nr_zones;
-    //     ret = zbd_report_zones(fd, ofst, len,
-    //                            ZBD_RO_ALL, zones, &nr_zones);
-    //     if (ret != 0) {
-    //         fprintf(stderr, "Couldn't report zone info\n");
-    //         return ret;
-    //     }
-
-    //     printf("zone %u write pointer: %llu\n", 0, zones[0].wp);
-
-    //     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
-
-    //     // write to fd at offset 0
-
-    //     ret = zbd_reset_zones(fd, 0, 0);
-    //     if (ret != 0) {
-    //         fprintf(stderr, "Couldn't reset zones\n");
-    //         goto cleanup;
-    //     }
-    //     int num = 2;
-    //     ssize_t b = pwrite(fd, &num, sizeof(num), zones[0].wp);
-    //     if (b != sizeof(num)) {
-    //         fprintf(stderr, "Couldn't write to fd\n");
-    //         ret = -1;
-    //         goto cleanup;
-    //     }
-
-    //     int buf = 0;
-    //     b = pread(fd, &buf, sizeof(buf), zones[0].wp);
-    //     if (b != sizeof(num)) {
-    //         fprintf(stderr, "Couldn't read from fd\n");
-    //         ret = -1;
-    //         goto cleanup;
-    //     }
-    //     if (buf != num) {
-    //         fprintf(stderr, "buf(%i) != num(%i)\n", buf, num);
-    //         ret = -1;
-    //         goto cleanup;
-    //     }
-    //     printf("Read %i from fd\n", buf);
-
-    // cleanup:
-    //     zbd_close(fd);
-    //     free(zones);
     return ret;
 }

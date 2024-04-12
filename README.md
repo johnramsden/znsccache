@@ -88,6 +88,32 @@ Finished uploading. Total uploaded size: 4294967296 bytes.
 
 ## TODO
 
-
 * Eviction (foreground)
 * Add SSD backend
+
+## Eviction
+
+x chunks in y zones
+
+If using LRU I get "holes" if chunk < zone on evict
+Remove 1, rewrite zone?
+
+If zone == chunk
+
+Eviction is delete 1, write 1
+
+---
+
+Keep a few free zones? Background defrag/evict by LRU?
+
+If < n zones have no free chunks remaining, LRU x chunks, migrate to new zone(s), clear old zones
+
+--
+
+GC algos
+
+Key params:
+
+Y axis: performance
+
+X axis: 

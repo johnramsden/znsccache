@@ -10,6 +10,14 @@
 #include <libzbd/zbd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+#define WRITE_GRANULARITY 4096
+
+// static int
+// zncc_evict(zncc_chunkcache *cc) {
+
+// }
 
 void
 print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
@@ -127,6 +135,37 @@ cleanup:
 }
 
 /**
+ * @brief Write buffer to disk
+ *
+ * @param to_write Total size of write
+ * @param buffer   Buffer to write to disk
+ * @param fd       Disk file descriptor
+ * @param write_size Granularity for each write
+ * @return int     Non-zero on error
+ */
+static int
+write_out(int fd, size_t to_write, char * buffer, ssize_t write_size, unsigned long long wp_start) {
+    int ret = 0;
+
+    ssize_t bytes_written;
+    size_t total_written = 0;
+
+    errno = 0;
+    while (total_written < to_write) {
+        bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start+total_written);
+        dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written, wp_start+total_written);
+        if ((bytes_written == -1) || (errno != 0)) {
+            dbg_printf("Error: %s\n", strerror(errno));
+            dbg_printf("Couldn't write to fd\n");
+            return -1;
+        }
+        total_written += bytes_written;
+        dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
+    }
+    return 0;
+}
+
+/**
  * @brief Write a chunk to a zone
  *
  * @param cc         chunk cache
@@ -164,20 +203,25 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     }
 
     dbg_printf("zone %u write pointer: %llu\n", chunk_info.zone, zones[chunk_info.zone].wp);
-
+    dbg_printf("Chunk pointer: %u\n", CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
-
-    // write to fd at offset 0
-
-    ssize_t b = pwrite(fd, data, cc->chunk_size, zones[chunk_info.zone].wp);
-    if (b != cc->chunk_size) {
-        fprintf(stderr, "Couldn't write to fd\n");
-        ret = -1;
-        goto cleanup;
-    }
 
     assert(CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone) ==
            zones[chunk_info.zone].wp);
+
+    unsigned long long wp_old = zones[chunk_info.zone].wp;
+    ret = write_out(fd, cc->chunk_size, data, WRITE_GRANULARITY,
+    CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
+
+    fsync(fd);
+
+    // ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
+    // if (ret != 0) {
+    //     fprintf(stderr, "Couldn't report zone info\n");
+    //     return ret;
+    // }
+    // dbg_printf("wp_old=%llu, wp_new=%llu\n", wp_old, zones[chunk_info.zone].wp);
+    // assert(wp_old+cc->chunk_size == zones[chunk_info.zone].wp);
 
 cleanup:
     zbd_close(fd);
@@ -360,11 +404,27 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             dbg_printf("S3 get failed: uuid=%s, bucket=%u\n", uuid, bucket);
             return ret;
         }
-        ret = zncc_put_in_bucket(cc, bucket, uuid, offset, size, cc->s3->callback_data.buffer);
-        if (ret != 0) {
-            dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
-            return ret;
+
+        off_t t_offset = offset;
+        uint32_t written = 0;
+        while (written < size) {
+            uint32_t remaining = size - written;
+            uint32_t write_now = cc->chunk_size;
+            if (remaining < cc->chunk_size) {
+                write_now = remaining;
+            }
+
+            dbg_printf("Writing: uuid=%s, bucket=%u, offset=%ld, size=%u, data=0x%" PRIXPTR "\n",
+                       uuid, bucket, t_offset, write_now, (uintptr_t)cc->s3->callback_data.buffer+written);
+            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+written);
+            if (ret != 0) {
+                dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
+                return ret;
+            }
+            t_offset += write_now;
+            written += write_now;
         }
+
         *data = cc->s3->callback_data.buffer;
     } else {
         dbg_printf("Read from chunk\n");
@@ -481,8 +541,11 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     populate_free_list(cc);
 
     dbg_printf("Initialized chunk cache:\n"
-               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\n",
-               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size);
+               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\npblock_size=%u\n",
+               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size, info.pblock_size);
+
+    printf("zone_size (bytes)=%llu\n", info.zone_size);
+
 cleanup:
     zbd_close(fd);
     return ret;
