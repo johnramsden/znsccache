@@ -11,13 +11,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #define WRITE_GRANULARITY 4096
 
-// static int
-// zncc_evict(zncc_chunkcache *cc) {
+static size_t
+adjust_size_to_multiple(size_t size, size_t multiple) {
+    if (multiple == 0) {
+        return size;
+    }
+    size_t remainder = size % multiple;
+    if (remainder == 0) {
+        return size;
+    }
+    return size + multiple - remainder;
+}
 
-// }
+/**
+ * @brief Do eviction
+ *
+ * @param cc   Chunk cache
+ * @return int Non-zero on error
+ */
+static int
+zncc_evict(zncc_chunkcache *cc) {
+
+}
 
 void
 print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
@@ -74,7 +93,7 @@ zncc_destroy(zncc_chunkcache *cc) {
  * @return int       Non-zero on error
  */
 int
-zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
+zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     struct zbd_info info;
 
     int ret = 0;
@@ -111,15 +130,9 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data) {
 
     // write to fd at offset 0
 
-    *data = malloc(cc->chunk_size);
-    if (*data == NULL) {
-        ret = -1;
-        goto cleanup;
-    }
-    size_t b = pread(fd, *data, cc->chunk_size, wp);
+    size_t b = pread(fd, data, cc->chunk_size, wp);
     if (b != cc->chunk_size) {
         fprintf(stderr, "Couldn't read from fd\n");
-        free(*data);
         ret = -1;
         goto cleanup;
     }
@@ -211,7 +224,7 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
 
     unsigned long long wp_old = zones[chunk_info.zone].wp;
     ret = write_out(fd, cc->chunk_size, data, WRITE_GRANULARITY,
-    CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
+                    CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
 
     fsync(fd);
 
@@ -317,6 +330,19 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
     return ret;
 }
 
+static void
+update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi) {
+    uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
+    uint64_t new_epoch = ms_since_epoch();
+    dbg_printf("EPOCH SUM OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
+    // Update total epoch sum
+    cc->epoch_list[zi->zone].time_sum += (new_epoch - old_epoch);
+    cc->epoch_list[zi->zone].chunk_times[zi->chunk] = new_epoch;
+    dbg_printf("EPOCH SUM NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
+    dbg_printf("EPOCH OLD for chunk=%lu\n", old_epoch);
+    dbg_printf("EPOCH OLD for chunk=%lu\n", new_epoch);
+}
+
 /**
  * @brief Place an item in the cache
  *
@@ -361,6 +387,8 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
         print_free_list(&cc->free_list);
     }
 
+    update_epoch(cc, &zi);
+
     return 0;
 }
 
@@ -398,7 +426,15 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
     zncc_chunk_info data_out;
 
+    // Use chunk multiple
+    size_t adjusted_size = adjust_size_to_multiple(size, cc->chunk_size);
+    char * buf = malloc(adjusted_size);
+    if (buf == NULL) {
+        nomem();
+    }
+
     if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, offset, &data_out) != 0) {
+        cc->s3->callback_data.buffer = buf;
         ret = zncc_s3_get(cc->s3, uuid, offset, size);
         if (ret != 0) {
             dbg_printf("S3 get failed: uuid=%s, bucket=%u\n", uuid, bucket);
@@ -427,8 +463,19 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
         *data = cc->s3->callback_data.buffer;
     } else {
+        *data = buf;
         dbg_printf("Read from chunk\n");
-        ret = zncc_read_chunk(cc, data_out, data);
+        uint32_t num_chunk = adjusted_size / cc->chunk_size;
+        uint32_t offset = 0;
+        for (int offset = 0; offset < adjusted_size; offset+=cc->chunk_size) {
+            // TODO: Multi-chunk
+            int tret = zncc_read_chunk(cc, data_out, *data+offset);
+            if (tret != 0) {
+                free(buf);
+                return -1;
+            }
+        }
+
     }
 
     return ret;
@@ -465,6 +512,26 @@ static void
 populate_free_list(zncc_chunkcache *cc) {
     for (int zti = 0; zti < cc->zones_total; zti++) {
         zncc_bucket_push_front(&cc->free_list, (zncc_chunk_info){.chunk = 0, .zone = zti});
+    }
+}
+
+static void
+init_epoch_list(zncc_chunkcache *cc) {
+    cc->epoch_list = malloc(cc->zones_total * sizeof(cc->epoch_list));
+    if (cc->epoch_list == NULL) {
+        nomem();
+    }
+    size_t sz_chunks = cc->chunks_per_zone * sizeof(uint64_t);
+    uint64_t epoch_now = ms_since_epoch();
+    for (int i = 0; i < cc->zones_total; i++) {
+        cc->epoch_list[i].time_sum = epoch_now*cc->chunks_per_zone;
+        cc->epoch_list[i].chunk_times = malloc(sz_chunks);
+        if (cc->epoch_list[i].chunk_times == NULL) {
+            nomem();
+        }
+        for (int j = 0; j < cc->chunks_per_zone; j++) {
+            cc->epoch_list[i].chunk_times[j] = epoch_now;
+        }
     }
 }
 
@@ -526,6 +593,8 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
         nomem();
     }
 
+    init_epoch_list(cc);
+
     if (cc->chunks_per_zone <= 0) {
         dbg_printf("Minimum 1 chunk per zone, found %u\n", cc->chunks_per_zone);
         ret = -1;
@@ -545,6 +614,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
                device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size, info.pblock_size);
 
     printf("zone_size (bytes)=%llu\n", info.zone_size);
+
 
 cleanup:
     zbd_close(fd);

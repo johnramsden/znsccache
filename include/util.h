@@ -17,6 +17,8 @@ char *
 read_file_to_string(char const *filename);
 int
 read_credentials(const char *filename, char **key, char **secret, char **bucket, char **host_name);
+long int
+ms_since_epoch();
 
 /* Will only print messages (to stdout) when DEBUG is defined */
 #ifdef DEBUG

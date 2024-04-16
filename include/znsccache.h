@@ -31,6 +31,11 @@ typedef struct zncc_bucket_list {
     zncc_bucket_node *tail;
 } zncc_bucket_list;
 
+typedef struct zncc_epoch_list {
+    uint64_t time_sum;
+    uint64_t *chunk_times;
+} zncc_epoch_list;
+
 void
 zncc_bucket_destroy_list(zncc_bucket_list *list);
 void
@@ -85,6 +90,7 @@ typedef struct zncc_chunkcache {
     uint32_t chunks_per_zone;
     uint32_t zones_total;
     uint32_t *allocated;
+    zncc_epoch_list *epoch_list;
     const char *device;
     zncc_bucket_list *buckets;
     zncc_bucket_list free_list;
@@ -102,7 +108,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 int
 zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data);
 int
-zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char **data);
+zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data);
 
 void
 print_bucket(zncc_bucket_list *bucket, uint32_t b_num);

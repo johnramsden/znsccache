@@ -85,10 +85,7 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     ctx->get_conditions = getConditions;
 
     // Initialize the callback data structure
-    ctx->callback_data.buffer = malloc(buffer_sz);
-    if (ctx->callback_data.buffer == NULL) {
-        nomem();
-    }
+    ctx->callback_data.buffer = NULL;
     ctx->callback_data.buffer_size = buffer_sz;
     ctx->callback_data.buffer_position = 0;
 
@@ -109,6 +106,17 @@ zncc_s3_destroy(zncc_s3 *ctx) {
     S3_deinitialize();
 }
 
+/**
+ * @brief Get data by object ID from S3
+ *
+ * Pre-req, ctx->callback_data.buffer is allocated to correct size
+ *
+ * @param ctx
+ * @param obj_id
+ * @param start_byte
+ * @param byte_count
+ * @return int
+ */
 int
 zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte_count) {
 
