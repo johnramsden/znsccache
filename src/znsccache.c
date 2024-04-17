@@ -48,11 +48,13 @@ test_ll(zncc_chunkcache *cc) {
     }
 }
 
-#define GET_T_SZ 16
+
 void
 test_get(zncc_chunkcache *cc) {
     int ret;
-    size_t xf = 4096*1024;
+    size_t xf = 512*1024*1024;
+
+    #define GET_T_SZ 16
     char *test[GET_T_SZ][2] = {{"6c228e61-abb7-4100-a5df-417f25b47c36", "s"},
                                {"cf752bc3-b33f-435f-ac30-178e971f54a2", "t"},
                                {"7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee", "u"},
@@ -69,6 +71,12 @@ test_get(zncc_chunkcache *cc) {
                                {"b9cece7d-50ce-4f00-9abb-4e9c07ed68fd", "f"},
                                {"7446cbb0-430b-44c4-9da9-443a044c14d1", "g"},
                                {"8c0630ac-c4b5-4bf1-a7a3-13a7e95032dd", "h"}};
+
+    // #define GET_T_SZ 4
+    // char *test[GET_T_SZ][2] = {{"6c228e61-abb7-4100-a5df-417f25b47c36", "s"},
+    //                            {"cf752bc3-b33f-435f-ac30-178e971f54a2", "t"},
+    //                            {"7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee", "u"},
+    //                            {"c3f16f76-8f94-40f1-950d-695bb226fe43", "v"}};
     for (int i = 0; i < GET_T_SZ; i++) {
         char *v1;
 
@@ -159,6 +167,8 @@ main(int argc, char **argv) {
     uint64_t chunk_size_int;
     int c;
     zncc_chunkcache cc;
+
+    zbd_set_log_level(ZBD_LOG_ERROR);
 
     if (geteuid() != 0) {
         fprintf(stderr, "Please run as root\n");
@@ -252,7 +262,7 @@ main(int argc, char **argv) {
 
     // // test_put(&cc);
 
-    zncc_destroy(&cc);
+    // zncc_destroy(&cc);
 
     return ret;
 }

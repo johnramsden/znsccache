@@ -166,14 +166,15 @@ write_out(int fd, size_t to_write, char * buffer, ssize_t write_size, unsigned l
     errno = 0;
     while (total_written < to_write) {
         bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start+total_written);
-        dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written, wp_start+total_written);
+        fsync(fd);
+        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written, wp_start+total_written);
         if ((bytes_written == -1) || (errno != 0)) {
             dbg_printf("Error: %s\n", strerror(errno));
             dbg_printf("Couldn't write to fd\n");
             return -1;
         }
         total_written += bytes_written;
-        dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
+        // dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
     }
     return 0;
 }
@@ -191,6 +192,8 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     struct zbd_info info;
 
     int ret = 0;
+
+    uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, chunk_info.zone);
 
     int fd = zbd_open(cc->device, O_RDWR, &info);
     if (fd < 0) {
@@ -215,18 +218,29 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         return ret;
     }
 
-    dbg_printf("zone %u write pointer: %llu\n", chunk_info.zone, zones[chunk_info.zone].wp);
-    dbg_printf("Chunk pointer: %u\n", CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
+    ret = zbd_open_zones(fd, zone_ptr, 1);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to open zones\n");
+        goto cleanup;
+    }
+
+
+    dbg_printf("zone %u write pointer: %llu, zone size=%u, chunk size=%u\n",
+    chunk_info.zone, zones[chunk_info.zone].wp, cc->zone_size, cc->chunk_size);
+    dbg_printf("Chunk pointer: %lu\n", CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
 
+    // printf("((%u) * (%d)) + ((%d) * (%d))=%d\n", cc->zone_size, chunk_info.zone, chunk_info.chunk,
+    //         cc->chunk_size, (((cc->zone_size) * (chunk_info.zone)) + ((chunk_info.chunk) * (cc->chunk_size))));
     assert(CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone) ==
            zones[chunk_info.zone].wp);
 
     unsigned long long wp_old = zones[chunk_info.zone].wp;
     ret = write_out(fd, cc->chunk_size, data, WRITE_GRANULARITY,
                     CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
-
-    fsync(fd);
+    if (ret != 0) {
+        goto cleanup;
+    }
 
     // ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
     // if (ret != 0) {
@@ -235,6 +249,18 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     // }
     // dbg_printf("wp_old=%llu, wp_new=%llu\n", wp_old, zones[chunk_info.zone].wp);
     // assert(wp_old+cc->chunk_size == zones[chunk_info.zone].wp);
+
+    ret = zbd_close_zones(fd, zone_ptr, 1);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to close zone\n");
+    }
+
+    if (chunk_info.chunk >= (cc->chunks_per_zone-1)) {
+    ret = zbd_finish_zones(fd, zone_ptr, 1);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to finish zone\n");
+    }
+    }
 
 cleanup:
     zbd_close(fd);
@@ -382,9 +408,9 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
 
     // Add next chunk in zone to free list
     if (zi.chunk < (cc->chunks_per_zone - 1)) {
-        zncc_bucket_push_front(&cc->free_list,
+        zncc_bucket_push_back(&cc->free_list,
                                (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
-        print_free_list(&cc->free_list);
+        // print_free_list(&cc->free_list);
     }
 
     update_epoch(cc, &zi);
@@ -481,6 +507,8 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     return ret;
 }
 
+#define GIB 1073741824
+
 /**
  * @brief Calculate number of chunks for a zone
  *
@@ -497,10 +525,13 @@ chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uint32_t *chun
         return -1;
     }
 
-    *chunks_in_zone = zone_size / chunk_size; // Always rounds down
+    // *chunks_in_zone = zone_size / chunk_size; // Always rounds down
+    // TODO: Bug on writes > 1GiB
+    *chunks_in_zone = GIB / chunk_size; // Always rounds down
 
     return 0;
 }
+
 
 /**
  * @brief Fill the "free list" with zns free chunks
@@ -562,19 +593,21 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
         goto cleanup;
     }
 
-    if (chunks_in_zone(chunk_size, info.zone_size, &cc->chunks_per_zone) != 0) {
+    cc->zone_size = info.zone_size;
+
+    if (chunks_in_zone(chunk_size, cc->zone_size, &cc->chunks_per_zone) != 0) {
         ret = -1;
         goto cleanup;
     }
 
     cc->s3 = s3;
-    cc->zone_size = info.zone_size;
+
     cc->device = device;
     cc->chunk_size = chunk_size;
     cc->zones_total = info.nr_zones;
 
     // TEST
-    cc->zones_total = 2;
+    // cc->zones_total = 2;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;

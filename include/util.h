@@ -32,6 +32,6 @@ ms_since_epoch();
 // 0, 1, | 2, 3, | 4, 5, | 6, 7
 
 // Get write pointer from (zone, chunk)
-#define CHUNK_POINTER(z_sz, c_sz, c_num, z_num) (((z_sz) * (z_num)) + ((c_num) * (c_sz)))
+#define CHUNK_POINTER(z_sz, c_sz, c_num, z_num) (((uint64_t)(z_sz) * (uint64_t)(z_num)) + ((uint64_t)(c_num) * (uint64_t)(c_sz)))
 
 #endif
