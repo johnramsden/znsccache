@@ -14,6 +14,7 @@
 #include <time.h>
 
 #define WRITE_GRANULARITY 4096
+#define EVICT_THRESH_ZONES_LEFT 4
 
 static size_t
 adjust_size_to_multiple(size_t size, size_t multiple) {
@@ -35,7 +36,62 @@ adjust_size_to_multiple(size_t size, size_t multiple) {
  */
 static int
 zncc_evict(zncc_chunkcache *cc) {
+    struct zbd_info info;
 
+    int ret = 0;
+    uint32_t full_zones = 0;
+    uint64_t lowest_evictable = 0;
+    uint32_t evictable_zone = 0;
+    for (int i = 0; i < cc->zones_total; i++) {
+        if (cc->epoch_list[i].full) {
+            full_zones++;
+        }
+        if (cc->epoch_list[i].time_sum < lowest_evictable) {
+            lowest_evictable = cc->epoch_list[i].time_sum;
+            evictable_zone = i;
+        }
+    }
+
+    uint32_t zones_remain = cc->zones_total - full_zones;
+    if (zones_remain > EVICT_THRESH_ZONES_LEFT) {
+        dbg_printf("%u zones remain, not evicting.\n", zones_remain);
+        // No evict
+        return 0;
+    }
+
+    dbg_printf("%u zones remain, evicting.\n", zones_remain);
+
+    uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, evictable_zone);
+
+    int fd = zbd_open(cc->device, O_RDWR, &info);
+    if (fd < 0) {
+        fprintf(stderr, "Error opening device: %s\n", cc->device);
+        return fd;
+    }
+
+    ret = zbd_reset_zones(fd, zone_ptr, 1);
+    if (ret != 0) {
+        fprintf(stderr, "Couldn't reset zone\n");
+        goto cleanup;
+    }
+
+    // Set epoch
+    uint64_t epoch_now = ms_since_epoch();
+    cc->epoch_list[evictable_zone].full = false;
+    cc->epoch_list[evictable_zone].time_sum = epoch_now*cc->chunks_per_zone;
+    for (int j = 0; j < cc->chunks_per_zone; j++) {
+        cc->epoch_list[evictable_zone].chunk_times[j] = epoch_now;
+    }
+
+    // Place in free list
+    zncc_bucket_push_back(&cc->free_list,
+                          (zncc_chunk_info){.chunk = 0, .zone = evictable_zone});
+
+    dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_zone, lowest_evictable);
+
+cleanup:
+    zbd_close(fd);
+    return ret;
 }
 
 void
@@ -505,10 +561,10 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
     }
 
-    return ret;
+    return zncc_evict(cc);
 }
 
-#define GIB 1073741824
+#define MAX_ZONE_USAGE 1073741824
 
 /**
  * @brief Calculate number of chunks for a zone
@@ -528,7 +584,7 @@ chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uint32_t *chun
 
     // *chunks_in_zone = zone_size / chunk_size; // Always rounds down
     // TODO: Bug on writes > 1GiB
-    *chunks_in_zone = GIB / chunk_size; // Always rounds down
+    *chunks_in_zone = MAX_ZONE_USAGE / chunk_size; // Always rounds down
 
     return 0;
 }
@@ -609,7 +665,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     cc->zones_total = info.nr_zones;
 
     // TEST
-    // cc->zones_total = 2;
+    cc->zones_total = 5;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
