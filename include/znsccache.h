@@ -6,6 +6,7 @@
 #include <libs3.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define UUID_SIZE 37
 
@@ -33,6 +34,7 @@ typedef struct zncc_bucket_list {
 
 typedef struct zncc_epoch_list {
     uint64_t time_sum;
+    bool full;
     uint64_t *chunk_times;
 } zncc_epoch_list;
 

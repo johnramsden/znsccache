@@ -256,10 +256,10 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     }
 
     if (chunk_info.chunk >= (cc->chunks_per_zone-1)) {
-    ret = zbd_finish_zones(fd, zone_ptr, 1);
-    if (ret != 0) {
-        fprintf(stderr, "Failed to finish zone\n");
-    }
+        ret = zbd_finish_zones(fd, zone_ptr, 1);
+        if (ret != 0) {
+            fprintf(stderr, "Failed to finish zone\n");
+        }
     }
 
 cleanup:
@@ -357,13 +357,14 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 }
 
 static void
-update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi) {
+update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full) {
     uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
     uint64_t new_epoch = ms_since_epoch();
     dbg_printf("EPOCH SUM OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     // Update total epoch sum
     cc->epoch_list[zi->zone].time_sum += (new_epoch - old_epoch);
     cc->epoch_list[zi->zone].chunk_times[zi->chunk] = new_epoch;
+    cc->epoch_list[zi->zone].full = full;
     dbg_printf("EPOCH SUM NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     dbg_printf("EPOCH OLD for chunk=%lu\n", old_epoch);
     dbg_printf("EPOCH OLD for chunk=%lu\n", new_epoch);
@@ -413,7 +414,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
         // print_free_list(&cc->free_list);
     }
 
-    update_epoch(cc, &zi);
+    update_epoch(cc, &zi, zi.chunk >= (cc->chunks_per_zone-1));
 
     return 0;
 }
@@ -555,6 +556,7 @@ init_epoch_list(zncc_chunkcache *cc) {
     size_t sz_chunks = cc->chunks_per_zone * sizeof(uint64_t);
     uint64_t epoch_now = ms_since_epoch();
     for (int i = 0; i < cc->zones_total; i++) {
+        cc->epoch_list[i].full = false;
         cc->epoch_list[i].time_sum = epoch_now*cc->chunks_per_zone;
         cc->epoch_list[i].chunk_times = malloc(sz_chunks);
         if (cc->epoch_list[i].chunk_times == NULL) {
