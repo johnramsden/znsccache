@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <time.h>
 
+#define EPOCH_2100 4111707640000
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 4
 
@@ -40,12 +41,13 @@ zncc_evict(zncc_chunkcache *cc) {
 
     int ret = 0;
     uint32_t full_zones = 0;
-    uint64_t lowest_evictable = 0;
+    uint64_t lowest_evictable = EPOCH_2100;
     uint32_t evictable_zone = 0;
     for (int i = 0; i < cc->zones_total; i++) {
         if (cc->epoch_list[i].full) {
             full_zones++;
         }
+        dbg_printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
         if (cc->epoch_list[i].time_sum < lowest_evictable) {
             lowest_evictable = cc->epoch_list[i].time_sum;
             evictable_zone = i;
@@ -76,7 +78,7 @@ zncc_evict(zncc_chunkcache *cc) {
     }
 
     // Set epoch
-    uint64_t epoch_now = ms_since_epoch();
+    uint64_t epoch_now = microsec_since_epoch();
     cc->epoch_list[evictable_zone].full = false;
     cc->epoch_list[evictable_zone].time_sum = epoch_now*cc->chunks_per_zone;
     for (int j = 0; j < cc->chunks_per_zone; j++) {
@@ -164,13 +166,13 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     // capacity will be reported.
     off_t ofst = 0;
     off_t len = 0;
-    size_t sz = info.nr_zones * (sizeof(struct zbd_zone));
+    size_t sz = cc->zones_total * (sizeof(struct zbd_zone));
     struct zbd_zone *zones = malloc(sz);
     if (zones == NULL) {
         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
         return -1;
     }
-    unsigned int nr_zones = info.nr_zones;
+    unsigned int nr_zones = cc->zones_total;
     ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
     if (ret != 0) {
         fprintf(stderr, "Couldn't report zone info\n");
@@ -261,13 +263,13 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     // capacity will be reported.
     off_t ofst = 0;
     off_t len = 0;
-    size_t sz = info.nr_zones * (sizeof(struct zbd_zone));
+    size_t sz = cc->zones_total * (sizeof(struct zbd_zone));
     struct zbd_zone *zones = malloc(sz);
     if (zones == NULL) {
         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
         return -1;
     }
-    unsigned int nr_zones = info.nr_zones;
+    unsigned int nr_zones = cc->zones_total;
     ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
     if (ret != 0) {
         fprintf(stderr, "Couldn't report zone info\n");
@@ -415,7 +417,7 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 static void
 update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full) {
     uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
-    uint64_t new_epoch = ms_since_epoch();
+    uint64_t new_epoch = microsec_since_epoch();
     dbg_printf("EPOCH SUM OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     // Update total epoch sum
     cc->epoch_list[zi->zone].time_sum += (new_epoch - old_epoch);
@@ -610,7 +612,7 @@ init_epoch_list(zncc_chunkcache *cc) {
         nomem();
     }
     size_t sz_chunks = cc->chunks_per_zone * sizeof(uint64_t);
-    uint64_t epoch_now = ms_since_epoch();
+    uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < cc->zones_total; i++) {
         cc->epoch_list[i].full = false;
         cc->epoch_list[i].time_sum = epoch_now*cc->chunks_per_zone;
@@ -665,7 +667,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     cc->zones_total = info.nr_zones;
 
     // TEST
-    cc->zones_total = 5;
+    // cc->zones_total = 6;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;

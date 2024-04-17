@@ -137,7 +137,7 @@ read_credentials(const char *filename, char **key, char **secret, char **bucket,
     free(json_data);
 }
 
-long int ms_since_epoch() {
+long int microsec_since_epoch() {
     struct timeval tp;
     gettimeofday(&tp, NULL);
     return tp.tv_sec * 1000 + tp.tv_usec / 1000;
