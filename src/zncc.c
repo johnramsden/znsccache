@@ -13,9 +13,10 @@
 #include <unistd.h>
 #include <time.h>
 
-#define EPOCH_2100 4111707640000
+#define EPOCH_2100 4111876856000000
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 4
+#define EVICT_THRESH_ZONES_REMOVE 4
 
 static size_t
 adjust_size_to_multiple(size_t size, size_t multiple) {
@@ -41,16 +42,31 @@ zncc_evict(zncc_chunkcache *cc) {
 
     int ret = 0;
     uint32_t full_zones = 0;
-    uint64_t lowest_evictable = EPOCH_2100;
-    uint32_t evictable_zone = 0;
+
+    uint64_t evictable[EVICT_THRESH_ZONES_REMOVE];
+    uint32_t evictable_ind[EVICT_THRESH_ZONES_REMOVE] = {0};
+
+    for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
+        evictable_ind[i] = -1;
+        evictable[i] = EPOCH_2100;
+    }
     for (int i = 0; i < cc->zones_total; i++) {
+        int largest_evictable_ind = 0;
         if (cc->epoch_list[i].full) {
             full_zones++;
         }
         dbg_printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
-        if (cc->epoch_list[i].time_sum < lowest_evictable) {
-            lowest_evictable = cc->epoch_list[i].time_sum;
-            evictable_zone = i;
+        // Get largest in evictable
+        for (int j = 0; j < EVICT_THRESH_ZONES_REMOVE; j++) {
+            if (evictable[j] > evictable[largest_evictable_ind]) {
+                largest_evictable_ind = j;
+            }
+        }
+
+        if ((evictable_ind[largest_evictable_ind] == -1) ||
+            (cc->epoch_list[i].time_sum < evictable[largest_evictable_ind]) ) {
+            evictable[largest_evictable_ind] = cc->epoch_list[i].time_sum;
+            evictable_ind[largest_evictable_ind] = i;
         }
     }
 
@@ -63,33 +79,35 @@ zncc_evict(zncc_chunkcache *cc) {
 
     dbg_printf("%u zones remain, evicting.\n", zones_remain);
 
-    uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, evictable_zone);
-
     int fd = zbd_open(cc->device, O_RDWR, &info);
     if (fd < 0) {
         fprintf(stderr, "Error opening device: %s\n", cc->device);
         return fd;
     }
 
-    ret = zbd_reset_zones(fd, zone_ptr, 1);
-    if (ret != 0) {
-        fprintf(stderr, "Couldn't reset zone\n");
-        goto cleanup;
-    }
-
     // Set epoch
     uint64_t epoch_now = microsec_since_epoch();
-    cc->epoch_list[evictable_zone].full = false;
-    cc->epoch_list[evictable_zone].time_sum = epoch_now*cc->chunks_per_zone;
-    for (int j = 0; j < cc->chunks_per_zone; j++) {
-        cc->epoch_list[evictable_zone].chunk_times[j] = epoch_now;
+    for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
+        dbg_printf("Evicting zone %u.\n", evictable_ind[i]);
+        cc->epoch_list[evictable_ind[i]].full = false;
+        cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
+        for (int j = 0; j < cc->chunks_per_zone; j++) {
+            cc->epoch_list[evictable_ind[i]].chunk_times[j] = epoch_now;
+        }
+
+        uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, evictable_ind[i]);
+        ret = zbd_reset_zones(fd, zone_ptr, 1);
+        if (ret != 0) {
+            fprintf(stderr, "Couldn't reset zone\n");
+            goto cleanup;
+        }
+
+        // Place in free list
+        zncc_bucket_push_back(&cc->free_list,
+                            (zncc_chunk_info){.chunk = 0, .zone = evictable_ind[i]});
+
+        dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_ind[i], evictable[i]);
     }
-
-    // Place in free list
-    zncc_bucket_push_back(&cc->free_list,
-                          (zncc_chunk_info){.chunk = 0, .zone = evictable_zone});
-
-    dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_zone, lowest_evictable);
 
 cleanup:
     zbd_close(fd);
@@ -667,7 +685,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     cc->zones_total = info.nr_zones;
 
     // TEST
-    // cc->zones_total = 6;
+    cc->zones_total = 6;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
