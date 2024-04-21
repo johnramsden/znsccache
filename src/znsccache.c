@@ -66,12 +66,13 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
+    int total = 33554432;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
         line[36] = '\0';
 
-        printf("%d: %s\n", count, line);
+        printf("%d / %d (%.4f): %s\n", count, total, (float)count / total, line);
         ret = zncc_get(cc, line, 0, xf, &v1);
         if (ret != 0) {
             fprintf(stderr, "Err for uuid=%s\n", line);
@@ -81,9 +82,9 @@ test_get(zncc_chunkcache *cc, char *test_file) {
 
         count++;
 
-        if (count == 30) {
-            break;
-        }
+        // if (count == 30) {
+        //     break;
+        // }
     }
 
     fclose(file);

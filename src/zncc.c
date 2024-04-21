@@ -15,8 +15,8 @@
 
 #define EPOCH_2100 4111876856000000
 #define WRITE_GRANULARITY 4096
-#define EVICT_THRESH_ZONES_LEFT 4
-#define EVICT_THRESH_ZONES_REMOVE 4
+#define EVICT_THRESH_ZONES_LEFT 10
+#define EVICT_THRESH_ZONES_REMOVE 20
 
 static size_t
 adjust_size_to_multiple(size_t size, size_t multiple) {
@@ -55,7 +55,7 @@ zncc_evict(zncc_chunkcache *cc) {
         if (cc->epoch_list[i].full) {
             full_zones++;
         }
-        printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
+        // printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
         // Get largest in evictable
         for (int j = 0; j < EVICT_THRESH_ZONES_REMOVE; j++) {
             if (evictable[j] > evictable[largest_evictable_ind]) {
@@ -623,7 +623,7 @@ populate_free_list(zncc_chunkcache *cc) {
 
 static void
 init_epoch_list(zncc_chunkcache *cc) {
-    cc->epoch_list = malloc(cc->zones_total * sizeof(cc->epoch_list));
+    cc->epoch_list = malloc(cc->zones_total * sizeof(zncc_epoch_list));
     if (cc->epoch_list == NULL) {
         nomem();
     }
@@ -683,10 +683,15 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     cc->zones_total = info.nr_zones;
 
     // TEST
-    cc->zones_total = 6;
+    cc->zones_total = 30;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
+
+    zncc_bucket_init_list(&cc->free_list);
+    populate_free_list(cc);
+
+    dbg_printf("Populated free list\n");
 
     cc->buckets = malloc(cc->chunks_total * sizeof(zncc_bucket_list));
     if (cc->buckets == NULL) {
@@ -704,10 +709,6 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     for (int i = 0; i < cc->chunks_total; i++) {
         zncc_bucket_init_list(&cc->buckets[i]);
     }
-
-    zncc_bucket_init_list(&cc->free_list);
-
-    populate_free_list(cc);
 
     dbg_printf("Initialized chunk cache:\n"
                "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\npblock_size=%u\n",

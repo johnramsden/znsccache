@@ -1,7 +1,7 @@
 IDIR =../include
 IEXTRADIR =/data/john/libs/include
 CC=gcc
-CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g
+CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g -fsanitize=address -static-libasan
 
 # define DEBUG in the source if we are debugging
 ifeq ($(DEBUG), 1)
@@ -11,7 +11,7 @@ ifeq ($(EMULATE_S3), 1)
 	CFLAGS+=-DEMULATE_S3
 endif
 
-S3_DELAY ?= 10
+S3_DELAY ?= 1
 CFLAGS+=-DS3_DELAY
 
 ODIR=obj
