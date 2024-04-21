@@ -55,7 +55,7 @@ zncc_evict(zncc_chunkcache *cc) {
         if (cc->epoch_list[i].full) {
             full_zones++;
         }
-        dbg_printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
+        printf("zone=%u epoch sum=%lu.\n", i, cc->epoch_list[i].time_sum);
         // Get largest in evictable
         for (int j = 0; j < EVICT_THRESH_ZONES_REMOVE; j++) {
             if (evictable[j] > evictable[largest_evictable_ind]) {
@@ -77,7 +77,7 @@ zncc_evict(zncc_chunkcache *cc) {
         return 0;
     }
 
-    dbg_printf("%u zones remain, evicting.\n", zones_remain);
+    printf("%u zones remain, evicting.\n", zones_remain);
 
     int fd = zbd_open(cc->device, O_RDWR, &info);
     if (fd < 0) {
@@ -88,7 +88,7 @@ zncc_evict(zncc_chunkcache *cc) {
     // Set epoch
     uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
-        dbg_printf("Evicting zone %u.\n", evictable_ind[i]);
+        printf("Evicting zone %u.\n", evictable_ind[i]);
         cc->epoch_list[evictable_ind[i]].full = false;
         cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
@@ -157,7 +157,6 @@ zncc_destroy(zncc_chunkcache *cc) {
     }
     free(cc->buckets);
     zncc_bucket_destroy_list(&cc->free_list);
-    free(cc->allocated);
 }
 
 /**
@@ -196,6 +195,8 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         fprintf(stderr, "Couldn't report zone info\n");
         return ret;
     }
+
+    printf("read [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
 
     unsigned long long wp =
         CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone);
@@ -299,7 +300,7 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         fprintf(stderr, "Failed to open zones\n");
         goto cleanup;
     }
-
+    printf("write [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
 
     dbg_printf("zone %u write pointer: %llu, zone size=%u, chunk size=%u\n",
     chunk_info.zone, zones[chunk_info.zone].wp, cc->zone_size, cc->chunk_size);
@@ -479,9 +480,6 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
 
     // Add to bucket
     zncc_bucket_push_front(&cc->buckets[bucket], zi);
-
-    // Set allocated
-    cc->allocated[ABSOLUTE_CHUNK(cc->chunks_per_zone, zi.zone, zi.chunk)] = 1;
 
     // Add next chunk in zone to free list
     if (zi.chunk < (cc->chunks_per_zone - 1)) {
@@ -689,15 +687,6 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
-
-    uint32_t sz_allocated = cc->chunks_total * sizeof(uint32_t);
-    cc->allocated = malloc(sz_allocated);
-    if (cc->allocated == NULL) {
-        nomem();
-    }
-
-    // Set allocated to zero
-    memset(cc->allocated, 0, sz_allocated);
 
     cc->buckets = malloc(cc->chunks_total * sizeof(zncc_bucket_list));
     if (cc->buckets == NULL) {

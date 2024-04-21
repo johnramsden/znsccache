@@ -19,6 +19,8 @@ int
 read_credentials(const char *filename, char **key, char **secret, char **bucket, char **host_name);
 long int
 microsec_since_epoch();
+int
+msleep(long msec);
 
 /* Will only print messages (to stdout) when DEBUG is defined */
 #ifdef DEBUG

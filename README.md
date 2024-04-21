@@ -43,6 +43,12 @@ sudo LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d /dev/nvme0n2 -s 4096 -c 
 sudo LD_LIBRARY_PATH=/data/john/libs/lib gdb --args ./znsccache -d /dev/nvme0n2 -s 4096 -c ../credentials.json
 ```
 
+## GDB
+
+```
+sudo valgrind env LD_LIBRARY_PATH=/data/john/libs/lib ./znsccache -d /dev/nvme0n2 -s 131072 -c ../credentials.json -f /home/john/ssd/zns/disk=268435456KB,obj=32KB,uuids=16777216iter=33554432.txt
+```
+
 ## Tidy
 
 ```
@@ -116,4 +122,4 @@ Key params:
 
 Y axis: performance
 
-X axis: 
+X axis:

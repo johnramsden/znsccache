@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+// In makefile
+// #define EMULATE_S3 1
+// #define S3_DELAY 1000
+
 static S3Status statusG = 0;
 
 static S3Status
@@ -60,6 +64,7 @@ void
 zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_access_key,
              char *host_name, size_t buffer_sz) {
 
+#ifndef EMULATE_S3
     ctx->access_key_id = access_key_id;
     ctx->secret_access_key = secret_access_key;
     ctx->bucket_name = bucket_name;
@@ -95,6 +100,7 @@ zncc_s3_init(zncc_s3 *ctx, char *bucket_name, char *access_key_id, char *secret_
     ctx->get_object_handler.getObjectDataCallback = &get_object_data_callback;
 
     ctx->status = 0;
+#endif
 }
 
 void
@@ -119,6 +125,8 @@ zncc_s3_destroy(zncc_s3 *ctx) {
  */
 int
 zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte_count) {
+
+#ifndef EMULATE_S3
 
     statusG = S3StatusOK;
 
@@ -145,6 +153,8 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
         fprintf(stderr, "S3 get object error: %d\n", ctx->status);
         ret = -1;
     }
-
     return ret;
+#else
+    return msleep(S3_DELAY);
+#endif
 }

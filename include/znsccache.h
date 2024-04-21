@@ -91,7 +91,6 @@ typedef struct zncc_chunkcache {
     uint32_t chunks_total;
     uint32_t chunks_per_zone;
     uint32_t zones_total;
-    uint32_t *allocated;
     zncc_epoch_list *epoch_list;
     const char *device;
     zncc_bucket_list *buckets;

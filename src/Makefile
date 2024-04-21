@@ -7,6 +7,12 @@ CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g
 ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
+ifeq ($(EMULATE_S3), 1)
+	CFLAGS+=-DEMULATE_S3
+endif
+
+S3_DELAY ?= 10
+CFLAGS+=-DS3_DELAY
 
 ODIR=obj
 LDIR =-L/data/john/libs/lib

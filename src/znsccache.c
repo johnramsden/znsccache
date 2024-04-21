@@ -49,46 +49,46 @@ test_ll(zncc_chunkcache *cc) {
 }
 
 
-void
-test_get(zncc_chunkcache *cc) {
+int
+test_get(zncc_chunkcache *cc, char *test_file) {
     int ret;
-    size_t xf = 512*1024*1024;
 
-    #define GET_T_SZ 16
-    char *test[GET_T_SZ][2] = {{"6c228e61-abb7-4100-a5df-417f25b47c36", "s"},
-                               {"cf752bc3-b33f-435f-ac30-178e971f54a2", "t"},
-                               {"7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee", "u"},
-                               {"c3f16f76-8f94-40f1-950d-695bb226fe43", "v"},
-                               {"54b4afb0-7624-448d-9c52-ddcc56e56bf2", "w"},
-                               {"3f5d58a4-1780-46b5-bd96-d4c5b4f55b2b", "x"},
-                               {"e5a19178-6b77-40b7-9bf8-f45f70ea19a5", "y"},
-                               {"13f9c273-3f2f-486a-8003-ba2fba58b258", "z"},
-                               {"c75b2775-f71e-47f9-9500-530c8cf9f344", "a"},
-                               {"e5be69c3-6e22-4c2c-aa09-0bff9417c361", "b"},
-                               {"982aff04-b7b6-4060-a141-241af8c46375", "c"},
-                               {"62c0ae68-e637-4ddc-a0aa-aa1151f88595", "d"},
-                               {"7fc3ca1b-3968-4274-9a5b-688f01dca81b", "e"},
-                               {"b9cece7d-50ce-4f00-9abb-4e9c07ed68fd", "f"},
-                               {"7446cbb0-430b-44c4-9da9-443a044c14d1", "g"},
-                               {"8c0630ac-c4b5-4bf1-a7a3-13a7e95032dd", "h"}};
+    // 32K objects
+    size_t xf = 32*1024;
 
-    // #define GET_T_SZ 4
-    // char *test[GET_T_SZ][2] = {{"6c228e61-abb7-4100-a5df-417f25b47c36", "s"},
-    //                            {"cf752bc3-b33f-435f-ac30-178e971f54a2", "t"},
-    //                            {"7c968f5a-0c97-4cd8-960b-1c1bf6ab67ee", "u"},
-    //                            {"c3f16f76-8f94-40f1-950d-695bb226fe43", "v"}};
-    for (int i = 0; i < GET_T_SZ; i++) {
+    FILE *file;
+    char line[40];  // Adjust buffer size as needed
+
+    file = fopen(test_file, "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    int count = 0;
+
+    while (fgets(line, sizeof(line), file)) {
         char *v1;
+        line[36] = '\0';
 
-        ret = zncc_get(cc, test[i][0], 0, xf, &v1);
-
+        printf("%d: %s\n", count, line);
+        ret = zncc_get(cc, line, 0, xf, &v1);
         if (ret != 0) {
-            dbg_printf("Err for uuid=%s, c=%s\n", test[i][0], test[i][1]);
+            fprintf(stderr, "Err for uuid=%s\n", line);
+        } else {
+            free(v1);
+        }
+
+        count++;
+
+        if (count == 30) {
+            break;
         }
     }
-    // for (int i = 0; i < cc->chunks_total; i++) {
-    //     print_bucket(&cc->buckets[i], i);
-    // }
+
+    fclose(file);
+
+    return 0;
 }
 
 static int
@@ -163,6 +163,7 @@ main(int argc, char **argv) {
     int fd = 0;
     char *device = NULL;
     char *chunk_size_str = NULL;
+    char *test_file = NULL;
     char *config = NULL;
     uint64_t chunk_size_int;
     int c;
@@ -177,7 +178,7 @@ main(int argc, char **argv) {
 
     opterr = 0;
 
-    while ((c = getopt(argc, argv, "d:s:c:")) != -1) {
+    while ((c = getopt(argc, argv, "d:s:c:f:")) != -1) {
         switch (c) {
             case 'd':
                 device = optarg;
@@ -187,6 +188,9 @@ main(int argc, char **argv) {
                 break;
             case 'c':
                 config = optarg;
+                break;
+            case 'f':
+                test_file = optarg;
                 break;
             case '?':
                 if (optopt == 'd') {
@@ -247,7 +251,12 @@ main(int argc, char **argv) {
 
     // basic_write_test(device);
 
-    test_get(&cc);
+    if (test_file != NULL) {
+        ret = test_get(&cc, test_file);
+        if (ret != 0) {
+            fprintf(stderr, "Test failed\n");
+        }
+    }
 
     // // v1[512] = '\0';
     // // dbg_printf("v1[512]=%s\n", v1);

@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <uuid/uuid.h>
+#include <time.h>
+#include <errno.h>
 
 /**
  * @brief Exit if NOMEM
@@ -143,3 +145,26 @@ long int microsec_since_epoch() {
     return tp.tv_sec * 1000 + tp.tv_usec / 1000;
 }
 
+/**
+ * @brief Sleep for the requested number of milliseconds.
+ *
+ * https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
+ */
+int msleep(long msec) {
+    struct timespec ts;
+    int res;
+
+    if (msec < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+
+    do {
+        res = nanosleep(&ts, &ts);
+    } while (res && errno == EINTR);
+
+    return res;
+}
