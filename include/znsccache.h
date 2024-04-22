@@ -93,6 +93,7 @@ typedef struct zncc_chunkcache {
     uint32_t zones_total;
     zncc_epoch_list *epoch_list;
     const char *device;
+    FILE *metrics_fd;
     zncc_bucket_list *buckets;
     zncc_bucket_list free_list;
     zncc_s3 *s3;
@@ -101,7 +102,7 @@ typedef struct zncc_chunkcache {
 // int
 // zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data);
 int
-zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3);
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3, char const *const metrics_file);
 void
 zncc_destroy(zncc_chunkcache *cc);
 int

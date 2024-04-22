@@ -13,10 +13,19 @@
 #include <unistd.h>
 #include <time.h>
 
-#define EPOCH_2100 4111876856000000
+int evictions = 0;
+int evict_errors = 0;
+int hit = 0;
+int accesses = 0;
+
+#define EPOCH_MAX 18446744073709551615UL
 #define WRITE_GRANULARITY 4096
-#define EVICT_THRESH_ZONES_LEFT 10
-#define EVICT_THRESH_ZONES_REMOVE 20
+#define EVICT_THRESH_ZONES_LEFT 3
+#define EVICT_THRESH_ZONES_REMOVE 6
+#define ZONES_USED 32
+#define METRIC_BUFFER_CHARS 100000
+
+char METRIC_BUFFER[METRIC_BUFFER_CHARS];
 
 static size_t
 adjust_size_to_multiple(size_t size, size_t multiple) {
@@ -44,11 +53,11 @@ zncc_evict(zncc_chunkcache *cc) {
     uint32_t full_zones = 0;
 
     uint64_t evictable[EVICT_THRESH_ZONES_REMOVE];
-    uint32_t evictable_ind[EVICT_THRESH_ZONES_REMOVE] = {0};
+    int32_t evictable_ind[EVICT_THRESH_ZONES_REMOVE] = {0};
 
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
         evictable_ind[i] = -1;
-        evictable[i] = EPOCH_2100;
+        evictable[i] = EPOCH_MAX;
     }
     for (int i = 0; i < cc->zones_total; i++) {
         int largest_evictable_ind = 0;
@@ -59,12 +68,15 @@ zncc_evict(zncc_chunkcache *cc) {
         // Get largest in evictable
         for (int j = 0; j < EVICT_THRESH_ZONES_REMOVE; j++) {
             if (evictable[j] > evictable[largest_evictable_ind]) {
+                // printf("largest_evictable_ind=%d.\n", largest_evictable_ind);
                 largest_evictable_ind = j;
             }
         }
 
         if ((evictable_ind[largest_evictable_ind] == -1) ||
             (cc->epoch_list[i].time_sum < evictable[largest_evictable_ind]) ) {
+            // printf("Setting evictable[%d]=%lu.\n", largest_evictable_ind, cc->epoch_list[i].time_sum);
+            // printf("Setting evictable_ind[%d]=%d.\n", largest_evictable_ind, i);
             evictable[largest_evictable_ind] = cc->epoch_list[i].time_sum;
             evictable_ind[largest_evictable_ind] = i;
         }
@@ -88,7 +100,12 @@ zncc_evict(zncc_chunkcache *cc) {
     // Set epoch
     uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
-        printf("Evicting zone %u.\n", evictable_ind[i]);
+        if (evictable_ind[i] == -1) {
+            evict_errors++;
+            fprintf(stdout, "WARNING, evictable_ind[%d]=%d, error=%d\n", i, evictable_ind[i], evict_errors);
+            continue;
+        }
+        printf("Evicting zone %d.\n", evictable_ind[i]);
         cc->epoch_list[evictable_ind[i]].full = false;
         cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
@@ -108,6 +125,9 @@ zncc_evict(zncc_chunkcache *cc) {
 
         dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_ind[i], evictable[i]);
     }
+
+    printf("Eviction number %d\n", ++evictions);
+    printf("Eviction errors %d\n", evict_errors);
 
 cleanup:
     zbd_close(fd);
@@ -157,6 +177,10 @@ zncc_destroy(zncc_chunkcache *cc) {
     }
     free(cc->buckets);
     zncc_bucket_destroy_list(&cc->free_list);
+
+    if (cc->metrics_fd != NULL) {
+        fclose(cc->metrics_fd);
+    }
 }
 
 /**
@@ -437,12 +461,13 @@ static void
 update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full) {
     uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
     uint64_t new_epoch = microsec_since_epoch();
-    dbg_printf("EPOCH SUM OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
-    // Update total epoch sum
-    cc->epoch_list[zi->zone].time_sum += (new_epoch - old_epoch);
+    dbg_printf("EPOCH AVG OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
+    // Update total epoch avg
+    cc->epoch_list[zi->zone].time_sum = update_average(
+        cc->epoch_list[zi->zone].time_sum, cc->zones_total, old_epoch, new_epoch);
     cc->epoch_list[zi->zone].chunk_times[zi->chunk] = new_epoch;
     cc->epoch_list[zi->zone].full = full;
-    dbg_printf("EPOCH SUM NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
+    dbg_printf("EPOCH AVG NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     dbg_printf("EPOCH OLD for chunk=%lu\n", old_epoch);
     dbg_printf("EPOCH OLD for chunk=%lu\n", new_epoch);
 }
@@ -506,6 +531,8 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
 int
 zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t size, char **data) {
 
+    accesses++;
+
     int ret = 0;
     uint32_t bucket;
 
@@ -564,6 +591,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
         *data = cc->s3->callback_data.buffer;
     } else {
+        hit++;
         *data = buf;
         dbg_printf("Read from chunk\n");
         uint32_t num_chunk = adjusted_size / cc->chunk_size;
@@ -578,6 +606,8 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
         }
 
     }
+
+    printf("accesses=%d, hit rate=%.4f\n", accesses, (float)hit / accesses);
 
     return zncc_evict(cc);
 }
@@ -631,7 +661,7 @@ init_epoch_list(zncc_chunkcache *cc) {
     uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < cc->zones_total; i++) {
         cc->epoch_list[i].full = false;
-        cc->epoch_list[i].time_sum = epoch_now*cc->chunks_per_zone;
+        cc->epoch_list[i].time_sum = epoch_now;
         cc->epoch_list[i].chunk_times = malloc(sz_chunks);
         if (cc->epoch_list[i].chunk_times == NULL) {
             nomem();
@@ -651,7 +681,7 @@ init_epoch_list(zncc_chunkcache *cc) {
  * @return int           Non-zero on error
  */
 int
-zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3) {
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3, char const *const metrics_file) {
     int ret = 0;
     struct zbd_info info;
 
@@ -683,7 +713,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     cc->zones_total = info.nr_zones;
 
     // TEST
-    cc->zones_total = 30;
+    cc->zones_total = ZONES_USED;
     // TEST FIN
 
     cc->chunks_total = cc->zones_total * cc->chunks_per_zone;
@@ -715,6 +745,16 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
                device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size, info.pblock_size);
 
     printf("zone_size (bytes)=%llu\n", info.zone_size);
+
+    cc->metrics_fd = NULL;
+    if (metrics_file != NULL) {
+        cc->metrics_fd = fopen(metrics_file, "w");
+        if (cc->metrics_fd == NULL) {
+            ret = -1;
+            goto cleanup;
+        }
+        setvbuf(cc->metrics_fd, METRIC_BUFFER, _IOFBF, sizeof(METRIC_BUFFER));
+    }
 
 
 cleanup:

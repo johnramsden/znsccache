@@ -123,3 +123,9 @@ Key params:
 Y axis: performance
 
 X axis:
+
+```
+10 zones remain, evicting.
+Evicting zone 20.
+Evicting zone 4294967295.
+```

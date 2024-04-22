@@ -17,10 +17,12 @@ char *
 read_file_to_string(char const *filename);
 int
 read_credentials(const char *filename, char **key, char **secret, char **bucket, char **host_name);
-long int
+uint64_t
 microsec_since_epoch();
 int
 msleep(long msec);
+uint64_t
+update_average(uint64_t current_avg, int n, uint64_t value_to_remove, uint64_t value_to_add);
 
 /* Will only print messages (to stdout) when DEBUG is defined */
 #ifdef DEBUG

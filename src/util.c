@@ -139,10 +139,11 @@ read_credentials(const char *filename, char **key, char **secret, char **bucket,
     free(json_data);
 }
 
-long int microsec_since_epoch() {
-    struct timeval tp;
-    gettimeofday(&tp, NULL);
-    return tp.tv_sec * 1000 + tp.tv_usec / 1000;
+unsigned long
+microsec_since_epoch() {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return tv.tv_sec*(uint64_t)1000000+tv.tv_usec;
 }
 
 /**
@@ -167,4 +168,12 @@ int msleep(long msec) {
     } while (res && errno == EINTR);
 
     return res;
+}
+
+/**
+ * @brief Update an average based on size, avg, old number to remove, and new value to add
+ */
+uint64_t
+update_average(uint64_t current_avg, int n, uint64_t value_to_remove, uint64_t value_to_add) {
+    return (current_avg * n - value_to_remove + value_to_add) / n;
 }

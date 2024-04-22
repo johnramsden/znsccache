@@ -55,6 +55,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
 
     // 32K objects
     size_t xf = 32*1024;
+    // size_t xf = 512*1024*1024;
 
     FILE *file;
     char line[40];  // Adjust buffer size as needed
@@ -66,7 +67,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 33554432;
+    int total = 2097152;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
@@ -165,6 +166,7 @@ main(int argc, char **argv) {
     char *device = NULL;
     char *chunk_size_str = NULL;
     char *test_file = NULL;
+    char *metrics_file = NULL;
     char *config = NULL;
     uint64_t chunk_size_int;
     int c;
@@ -179,7 +181,7 @@ main(int argc, char **argv) {
 
     opterr = 0;
 
-    while ((c = getopt(argc, argv, "d:s:c:f:")) != -1) {
+    while ((c = getopt(argc, argv, "d:s:c:f:m:")) != -1) {
         switch (c) {
             case 'd':
                 device = optarg;
@@ -192,6 +194,9 @@ main(int argc, char **argv) {
                 break;
             case 'f':
                 test_file = optarg;
+                break;
+            case 'm':
+                metrics_file = optarg;
                 break;
             case '?':
                 if (optopt == 'd') {
@@ -244,7 +249,7 @@ main(int argc, char **argv) {
     zncc_s3 s3;
     zncc_s3_init(&s3, bucket, key, secret, host_name, 8192*1024);
 
-    ret = zncc_init(&cc, device, chunk_size_int, &s3);
+    ret = zncc_init(&cc, device, chunk_size_int, &s3, metrics_file);
     if (ret != 0) {
         fprintf(stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
@@ -272,7 +277,7 @@ main(int argc, char **argv) {
 
     // // test_put(&cc);
 
-    // zncc_destroy(&cc);
+    zncc_destroy(&cc);
 
     return ret;
 }
