@@ -454,6 +454,9 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 
     intermediate_uuid->offset = offset;
 
+    dbg_printf("intermediate_uuid->offset=%ld, intermediate_uuid->uuid_hash=%u\n",
+               intermediate_uuid->offset, intermediate_uuid->uuid_hash);
+
     return ret;
 }
 
@@ -539,6 +542,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     dbg_printf("Get: uuid=%s\n", uuid);
 
     __uuid_intermediate intermediate_uuid;
+    memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
 
     ret = setup_intermediate_uuid(&intermediate_uuid, uuid, offset);
 
