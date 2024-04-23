@@ -177,3 +177,15 @@ uint64_t
 update_average(uint64_t current_avg, int n, uint64_t value_to_remove, uint64_t value_to_add) {
     return (current_avg * n - value_to_remove + value_to_add) / n;
 }
+
+size_t
+adjust_size_to_multiple(size_t size, size_t multiple) {
+    if (multiple == 0) {
+        return size;
+    }
+    size_t remainder = size % multiple;
+    if (remainder == 0) {
+        return size;
+    }
+    return size + multiple - remainder;
+}

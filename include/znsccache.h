@@ -116,4 +116,6 @@ void
 print_bucket(zncc_bucket_list *bucket, uint32_t b_num);
 void
 print_free_list(zncc_bucket_list *bucket);
+
+#define metric_printf(FD, M, ...) do { if (FD != NULL) fprintf(FD, M, ##__VA_ARGS__);} while(0)
 #endif

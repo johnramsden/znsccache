@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define S3_BUFF_SZ (8192*1024)
+
 /**
  * https://github.com/westerndigitalcorporation/libzbd/blob/master/include/libzbd/zbd.h
  */
@@ -67,13 +69,15 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 2097152;
+    int total = 4194304;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
         line[36] = '\0';
 
-        printf("%d / %d (%.4f): %s\n", count, total, (float)count / total, line);
+        if (count % 5000 == 0) {
+            printf("%d / %d (%.4f): %s\n", count, total, (float)count / total, line);
+        }
         ret = zncc_get(cc, line, 0, xf, &v1);
         if (ret != 0) {
             fprintf(stderr, "Err for uuid=%s\n", line);
@@ -157,6 +161,68 @@ cleanup:
     zbd_close(fd);
     free(zones);
     free(buffer);
+}
+
+int
+test_s3_latency(zncc_chunkcache *cc) {
+
+// * 32K obj  - chunk sz 16K, 32K   - evict, no evict - S3 avg 32K get
+// * 512K obj - chunk sz 256K, 512K - evict, no evict - S3 avg 512K get
+// * 1M obj   - chunk sz 512K, 1M   - evict, no evict - S3 avg 1M get
+// * 1G obj   - chunk sz 512M, 1G   - evict, no evict - S3 avg 1G get
+    int ret = 0;
+    size_t xf = 1*1024*1024*1024;
+
+    struct timespec start, end;
+
+    #define GET_T_SZ 15
+    double times[GET_T_SZ];
+    char *test[GET_T_SZ][2] = {
+        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
+        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
+        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
+        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
+        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
+        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
+        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
+        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
+        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
+        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
+        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
+        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
+        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
+        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
+        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
+                               };
+
+    double sum = 0;
+
+    size_t adjusted_size = adjust_size_to_multiple(xf, cc->chunk_size);
+    char * buf = malloc(adjusted_size);
+    if (buf == NULL) {
+        nomem();
+    }
+    for (int i = 0; i < GET_T_SZ; i++) {
+        char *v1;
+
+        cc->s3->callback_data.buffer = buf;
+
+        TIME_NOW(&start);
+        ret = zncc_s3_get(cc->s3, test[i][0], 0, xf);
+        if (ret != 0) {
+            printf("S3 get failed %d\n", i);
+            return ret;
+        }
+        TIME_NOW(&end);
+
+        times[i] = TIME_DIFFERENCE_MILLISEC(start, end);
+        sum += times[i];
+        printf("%d=%f\n", i, times[i]);
+    }
+
+    printf("avg=%f\n", sum / GET_T_SZ);
+
+    return ret;
 }
 
 int
@@ -247,13 +313,18 @@ main(int argc, char **argv) {
     }
 
     zncc_s3 s3;
-    zncc_s3_init(&s3, bucket, key, secret, host_name, 8192*1024);
+    zncc_s3_init(&s3, bucket, key, secret, host_name, S3_BUFF_SZ);
 
     ret = zncc_init(&cc, device, chunk_size_int, &s3, metrics_file);
     if (ret != 0) {
         fprintf(stderr, "Failed to initialize chunk cache=%s.\n", chunk_size_str);
         exit(EXIT_FAILURE);
     }
+    // ret = test_s3_latency(&cc);
+    // if (ret != 0) {
+    //     fprintf(stderr, "Failed to test s3\n");
+    //     exit(EXIT_FAILURE);
+    // }
 
     // basic_write_test(device);
 

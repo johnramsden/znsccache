@@ -12,32 +12,31 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <stdarg.h>
 
 int evictions = 0;
 int evict_errors = 0;
 int hit = 0;
 int accesses = 0;
 
+struct timespec started_zncc;
+#define SINCE_BEGIN(now) (TIME_DIFFERENCE_MILLISEC(started_zncc, (now)))
+
 #define EPOCH_MAX 18446744073709551615UL
 #define WRITE_GRANULARITY 4096
-#define EVICT_THRESH_ZONES_LEFT 3
-#define EVICT_THRESH_ZONES_REMOVE 6
-#define ZONES_USED 32
+#define EVICT_THRESH_ZONES_LEFT 1
+#define EVICT_THRESH_ZONES_REMOVE 2
+#define ZONES_USED 16
 #define METRIC_BUFFER_CHARS 100000
 
-char METRIC_BUFFER[METRIC_BUFFER_CHARS];
+#define METRIC_HITRATE "hitrate"
+#define METRIC_EVICTION "evictions"
+#define METRIC_GET "get"
+#define METRIC_READ "read"
+#define METRIC_WRITE "write"
+#define METRIC_FREE_ZONES "freezones"
 
-static size_t
-adjust_size_to_multiple(size_t size, size_t multiple) {
-    if (multiple == 0) {
-        return size;
-    }
-    size_t remainder = size % multiple;
-    if (remainder == 0) {
-        return size;
-    }
-    return size + multiple - remainder;
-}
+char METRIC_BUFFER[METRIC_BUFFER_CHARS];
 
 /**
  * @brief Do eviction
@@ -83,13 +82,20 @@ zncc_evict(zncc_chunkcache *cc) {
     }
 
     uint32_t zones_remain = cc->zones_total - full_zones;
+    struct timespec fz_ts;
+    TIME_NOW(&fz_ts);
+    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(fz_ts), METRIC_FREE_ZONES, zones_remain);
     if (zones_remain > EVICT_THRESH_ZONES_LEFT) {
         dbg_printf("%u zones remain, not evicting.\n", zones_remain);
         // No evict
         return 0;
     }
 
-    printf("%u zones remain, evicting.\n", zones_remain);
+    struct timespec evict_ts;
+    TIME_NOW(&evict_ts);
+    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(evict_ts), METRIC_EVICTION, ++evictions);
+
+    dbg_printf("%u zones remain, evicting.\n", zones_remain);
 
     int fd = zbd_open(cc->device, O_RDWR, &info);
     if (fd < 0) {
@@ -105,7 +111,7 @@ zncc_evict(zncc_chunkcache *cc) {
             fprintf(stdout, "WARNING, evictable_ind[%d]=%d, error=%d\n", i, evictable_ind[i], evict_errors);
             continue;
         }
-        printf("Evicting zone %d.\n", evictable_ind[i]);
+        dbg_printf("Evicting zone %d.\n", evictable_ind[i]);
         cc->epoch_list[evictable_ind[i]].full = false;
         cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
@@ -126,8 +132,7 @@ zncc_evict(zncc_chunkcache *cc) {
         dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_ind[i], evictable[i]);
     }
 
-    printf("Eviction number %d\n", ++evictions);
-    printf("Eviction errors %d\n", evict_errors);
+    dbg_printf("Eviction number %d\n", ++evictions);
 
 cleanup:
     zbd_close(fd);
@@ -141,7 +146,7 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
         if (b == NULL) {
             break;
         }
-        printf("[b=%u] (zone=%u,chunk=%u,uuid=%s)\n", b_num, b->data.zone, b->data.chunk,
+        dbg_printf("[b=%u] (zone=%u,chunk=%u,uuid=%s)\n", b_num, b->data.zone, b->data.chunk,
                b->data.uuid);
         b = b->next;
     }
@@ -149,7 +154,7 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
 
 void
 print_free_list(zncc_bucket_list *bucket) {
-    printf("Free List\n");
+    dbg_printf("Free List\n");
     zncc_bucket_node *b = bucket->head;
     while (1) {
         if (b == NULL) {
@@ -179,6 +184,7 @@ zncc_destroy(zncc_chunkcache *cc) {
     zncc_bucket_destroy_list(&cc->free_list);
 
     if (cc->metrics_fd != NULL) {
+        fflush(cc->metrics_fd);
         fclose(cc->metrics_fd);
     }
 }
@@ -193,6 +199,9 @@ zncc_destroy(zncc_chunkcache *cc) {
  */
 int
 zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
+    struct timespec start, end;
+    TIME_NOW(&start);
+
     struct zbd_info info;
 
     int ret = 0;
@@ -220,7 +229,7 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         return ret;
     }
 
-    printf("read [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
+    dbg_printf("read [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
 
     unsigned long long wp =
         CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone);
@@ -245,6 +254,9 @@ zncc_read_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
 cleanup:
     zbd_close(fd);
     free(zones);
+    TIME_NOW(&end);
+    double t_now = SINCE_BEGIN(end);
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_READ, TIME_DIFFERENCE_MILLISEC(start, end));
     return ret;
 }
 
@@ -290,6 +302,9 @@ write_out(int fd, size_t to_write, char * buffer, ssize_t write_size, unsigned l
  */
 int
 zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
+    struct timespec start, end;
+    TIME_NOW(&start);
+
     struct zbd_info info;
 
     int ret = 0;
@@ -324,7 +339,7 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         fprintf(stderr, "Failed to open zones\n");
         goto cleanup;
     }
-    printf("write [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
+    dbg_printf("write [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
 
     dbg_printf("zone %u write pointer: %llu, zone size=%u, chunk size=%u\n",
     chunk_info.zone, zones[chunk_info.zone].wp, cc->zone_size, cc->chunk_size);
@@ -366,6 +381,9 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
 cleanup:
     zbd_close(fd);
     free(zones);
+    TIME_NOW(&end);
+    double t_now = SINCE_BEGIN(end);
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_WRITE, TIME_DIFFERENCE_MILLISEC(start, end));
     return ret;
 }
 
@@ -534,6 +552,9 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
 int
 zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t size, char **data) {
 
+    struct timespec start, end;
+    TIME_NOW(&start);
+
     accesses++;
 
     int ret = 0;
@@ -608,10 +629,14 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
                 return -1;
             }
         }
-
     }
 
-    printf("accesses=%d, hit rate=%.4f\n", accesses, (float)hit / accesses);
+    TIME_NOW(&end);
+    double t_now = SINCE_BEGIN(end);
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_HITRATE, (float)hit / accesses);
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_GET, TIME_DIFFERENCE_MILLISEC(start, end));
+
+    dbg_printf("accesses=%d, hit rate=%.4f\n", accesses, (float)hit / accesses);
 
     return zncc_evict(cc);
 }
@@ -640,7 +665,6 @@ chunks_in_zone(uint64_t chunk_size, unsigned long long zone_size, uint32_t *chun
 
     return 0;
 }
-
 
 /**
  * @brief Fill the "free list" with zns free chunks
@@ -748,7 +772,7 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
                "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\npblock_size=%u\n",
                device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size, info.pblock_size);
 
-    printf("zone_size (bytes)=%llu\n", info.zone_size);
+    dbg_printf("zone_size (bytes)=%llu\n", info.zone_size);
 
     cc->metrics_fd = NULL;
     if (metrics_file != NULL) {
@@ -759,6 +783,11 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
         }
         setvbuf(cc->metrics_fd, METRIC_BUFFER, _IOFBF, sizeof(METRIC_BUFFER));
     }
+
+    metric_printf(cc->metrics_fd, "timestamp,type,timems\n");
+    fflush(cc->metrics_fd);
+
+    TIME_NOW(&started_zncc);
 
 
 cleanup:
