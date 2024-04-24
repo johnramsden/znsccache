@@ -67,6 +67,35 @@ zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t of
 }
 
 /**
+ * @brief Remove node from list
+ *
+ * @param list Linked list
+ * @param node Node to remove
+ */
+void
+zncc_bucket_remove(zncc_bucket_list* list, zncc_bucket_node* node) {
+    if (node == NULL) return;
+
+    // Update the next pointer of the previous node, if not removing head
+    if (node->prev != NULL) {
+        node->prev->next = node->next;
+    } else {
+        // Node is the head
+        list->head = node->next;
+    }
+
+    // Update the prev pointer of the next node, if not removing tail
+    if (node->next != NULL) {
+        node->next->prev = node->prev;
+    } else {
+        // Node is the tail
+        list->tail = node->prev;
+    }
+
+    free(node);
+}
+
+/**
  * @brief Get a chunk item based on UUID
  *
  * @param list Linked list

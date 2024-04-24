@@ -26,7 +26,7 @@ struct timespec started_zncc;
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 1
 #define EVICT_THRESH_ZONES_REMOVE 8
-#define ZONES_USED 64
+#define ZONES_USED 6
 #define METRIC_BUFFER_CHARS 100000
 
 #define METRIC_HITRATE "hitrate"
@@ -115,7 +115,7 @@ zncc_evict(zncc_chunkcache *cc) {
         cc->epoch_list[evictable_ind[i]].full = false;
         cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
-            cc->epoch_list[evictable_ind[i]].chunk_times[j] = epoch_now;
+            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_time = epoch_now;
         }
 
         uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, evictable_ind[i]);
@@ -480,13 +480,13 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 
 static void
 update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full) {
-    uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
+    uint64_t old_epoch = cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_time;
     uint64_t new_epoch = microsec_since_epoch();
     dbg_printf("EPOCH AVG OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     // Update total epoch avg
     cc->epoch_list[zi->zone].time_sum = update_average(
         cc->epoch_list[zi->zone].time_sum, cc->zones_total, old_epoch, new_epoch);
-    cc->epoch_list[zi->zone].chunk_times[zi->chunk] = new_epoch;
+    cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_time = new_epoch;
     cc->epoch_list[zi->zone].full = full;
     dbg_printf("EPOCH AVG NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     dbg_printf("EPOCH OLD for chunk=%lu\n", old_epoch);
@@ -685,17 +685,17 @@ init_epoch_list(zncc_chunkcache *cc) {
     if (cc->epoch_list == NULL) {
         nomem();
     }
-    size_t sz_chunks = cc->chunks_per_zone * sizeof(uint64_t);
+    size_t sz_chunks = cc->chunks_per_zone * sizeof(zncc_epoch_chunk);
     uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < cc->zones_total; i++) {
         cc->epoch_list[i].full = false;
         cc->epoch_list[i].time_sum = epoch_now;
-        cc->epoch_list[i].chunk_times = malloc(sz_chunks);
-        if (cc->epoch_list[i].chunk_times == NULL) {
+        cc->epoch_list[i].epoch_chunks = malloc(sz_chunks);
+        if (cc->epoch_list[i].epoch_chunks == NULL) {
             nomem();
         }
         for (int j = 0; j < cc->chunks_per_zone; j++) {
-            cc->epoch_list[i].chunk_times[j] = epoch_now;
+            cc->epoch_list[i].epoch_chunks[j].chunk_time = epoch_now;
         }
     }
 }
