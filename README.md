@@ -117,6 +117,17 @@ Bench:
 
 Using 57ms for bench
 
+Evict
+
+'disk=16777216KB,obj=32KB,uuids=41943040iter=4194304.csv'
+
+No Evict:
+
+disk=16777216KB
+obj=32KB
+uuids=524288
+iter=4194304
+
 ```
 make clean && DEBUG=0 EMULATE_S3=1 S3_DELAY=57 make
 ```
@@ -144,6 +155,25 @@ avg=66.007688
 
 Using 198ms for bench
 
+```
+make clean && DEBUG=0 EMULATE_S3=1 S3_DELAY=198 make
+```
+
+Evict
+
+disk=16GB
+obj=512KB
+uuids=2621440
+iter=262144
+
+No Evict:
+
+disk=16GB
+obj=512KB
+uuids=32768
+iter=262144
+
+
 0=299.297865
 1=190.926778
 2=228.409959
@@ -164,6 +194,14 @@ geomean=197.93
 avg=205.054607
 
 * 1M obj    - chunk sz 512K, 1M   - evict, no evict - S3 geomean 1M
+
+Evict:
+
+disk=16777216KB,obj=1024KB,uuids=1310720iter=131072
+
+No Evict:
+
+disk=16777216KB,obj=1024KB,uuids=16384iter=131072
 
 Using 273ms for bench
 
@@ -190,6 +228,9 @@ avg=279.015874
 
 Using 5974ms for bench
 
+disk=16777216KB,obj=262144KB,uuids=64iter=512
+disk=16777216KB,obj=262144KB,uuids=5120iter=512
+
 0=19432.277805
 1=9693.144624
 2=8815.460454
@@ -212,6 +253,35 @@ avg=6623.291940
 * 1G obj    - chunk sz 512M 1G    - evict, no evict - S3 geomean 1G
 
 Using 24343ms for bench
+
+disk=16777216KB,obj=1048576KB,uuids=1280iter=128
+disk=16777216KB,obj=1048576KB,uuids=16iter=128
+
+0=43754.830457
+1=27948.829392
+2=20282.773869
+3=24346.867982
+4=18599.868245
+5=19434.322517
+6=21626.409352
+7=20666.890445
+8=20143.417247
+9=18520.894672
+10=16242.383070
+11=35398.169103
+12=32120.796345
+13=30162.610940
+14=30809.102791
+stdev=7505.53
+geomean=24343.18
+avg=25337.211095
+
+* 1G obj    - chunk sz 512M 1G    - evict, no evict - S3 geomean 1G
+
+Using 24343ms for bench
+
+disk=67108864KB,obj=1048576KB,uuids=64iter=512
+disk=67108864KB,obj=1048576KB,uuids=5120iter=512
 
 0=43754.830457
 1=27948.829392

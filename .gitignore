@@ -1,4 +1,4 @@
 *.o
 src/znsccache
 /credentials.json
-/disk=268435456KB,obj=32KB,uuids=16777216iter=33554432.txt
+/disk*
