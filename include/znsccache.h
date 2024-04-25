@@ -95,6 +95,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
 // CACHE
 
 typedef struct zncc_chunkcache {
+    uint64_t cache_epoch;
     uint32_t zone_size;
     uint32_t chunk_size;
     uint32_t chunks_total;

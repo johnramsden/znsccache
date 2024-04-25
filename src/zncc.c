@@ -26,7 +26,7 @@ struct timespec started_zncc;
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 1
 #define EVICT_THRESH_ZONES_REMOVE 2
-#define ZONES_USED 6
+#define ZONES_USED 10
 #define METRIC_BUFFER_CHARS 100000
 
 #define METRIC_HITRATE "hitrate"
@@ -103,8 +103,6 @@ zncc_evict(zncc_chunkcache *cc) {
         return fd;
     }
 
-    // Set epoch
-    uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
         if (evictable_ind[i] == -1) {
             evict_errors++;
@@ -113,9 +111,9 @@ zncc_evict(zncc_chunkcache *cc) {
         }
         dbg_printf("Evicting zone %d.\n", evictable_ind[i]);
         cc->epoch_list[evictable_ind[i]].full = false;
-        cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
+        cc->epoch_list[evictable_ind[i]].time_sum = cc->cache_epoch;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
-            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_time = epoch_now;
+            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_time = cc->cache_epoch;
             if (cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node != NULL) {
                 // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list, 0);
                 zncc_bucket_remove(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
@@ -708,9 +706,10 @@ init_epoch_list(zncc_chunkcache *cc) {
     }
     size_t sz_chunks = cc->chunks_per_zone * sizeof(zncc_epoch_chunk);
     uint64_t epoch_now = microsec_since_epoch();
+    cc->cache_epoch = epoch_now;
     for (int i = 0; i < cc->zones_total; i++) {
         cc->epoch_list[i].full = false;
-        cc->epoch_list[i].time_sum = epoch_now;
+        cc->epoch_list[i].time_sum = cc->cache_epoch;
         cc->epoch_list[i].epoch_chunks = malloc(sz_chunks);
         if (cc->epoch_list[i].epoch_chunks == NULL) {
             nomem();

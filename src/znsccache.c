@@ -56,7 +56,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     int ret;
 
     // 32K objects
-    size_t xf = 512*1024*1024;
+    size_t xf = 32*1024;
     // size_t xf = 512*1024*1024;
 
     FILE *file;
@@ -69,7 +69,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 512;
+    int total = 2621440;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
