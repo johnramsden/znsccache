@@ -328,12 +328,12 @@ main(int argc, char **argv) {
 
     // basic_write_test(device);
 
-    // if (test_file != NULL) {
-    //     ret = test_get(&cc, test_file);
-    //     if (ret != 0) {
-    //         fprintf(stderr, "Test failed\n");
-    //     }
-    // }
+    if (test_file != NULL) {
+        ret = test_get(&cc, test_file);
+        if (ret != 0) {
+            fprintf(stderr, "Test failed\n");
+        }
+    }
 
     // // v1[512] = '\0';
     // // dbg_printf("v1[512]=%s\n", v1);

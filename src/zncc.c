@@ -513,7 +513,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
         // TODO: Evict
         return -1;
     }
-    dbg_printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
+    printf("Found free [zone,chunk]=[%u,%u]\n", zi.zone, zi.chunk);
 
     strcpy(zi.uuid, uuid);
     zi.offset = offset;
@@ -544,7 +544,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
  *
  * @param cc
  * @param uuid   UUID string (MAX 37 bytes with \0)
- * @param offset
+ * @param offset Multiple of chunk
  * @param size
  * @param data
  * @return int
@@ -560,74 +560,80 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     int ret = 0;
     uint32_t bucket;
 
-    dbg_printf("Get: uuid=%s\n", uuid);
-
-    __uuid_intermediate intermediate_uuid;
-    memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
-
-    ret = setup_intermediate_uuid(&intermediate_uuid, uuid, offset);
-
-    uint32_t hash;
-    ret = crc32_hash((char *) &intermediate_uuid, sizeof(intermediate_uuid), &hash);
-    if (ret != 0) {
-        return ret;
-    }
-
-    bucket = find_bucket(hash, cc->chunks_total);
-
-    dbg_printf("Found bucket: %u\n", bucket);
-
-    zncc_chunk_info data_out;
-
     // Use chunk multiple
     size_t adjusted_size = adjust_size_to_multiple(size, cc->chunk_size);
     char * buf = malloc(adjusted_size);
     if (buf == NULL) {
         nomem();
     }
+    uint32_t num_chunk = adjusted_size / cc->chunk_size;
 
-    if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, offset, &data_out) != 0) {
-        cc->s3->callback_data.buffer = buf;
-        ret = zncc_s3_get(cc->s3, uuid, offset, size);
-        if (ret != 0) {
-            dbg_printf("S3 get failed: uuid=%s, bucket=%u\n", uuid, bucket);
-            return ret;
-        }
+    printf("Get: uuid=%s, off=%lu\n", uuid, offset);
 
-        off_t t_offset = offset;
-        uint32_t written = 0;
-        while (written < size) {
-            uint32_t remaining = size - written;
+    uint32_t hash;
+    uint32_t t_offset = offset;
+    uint32_t done_bytes = 0;
+    uint32_t accessed = 0;
+    uint32_t s3_buf_adjust = 0; // Adjust read location based on when S3 call occurred
+    int called_s3 = 0;
+    while (done_bytes < size) {
+
+        // Get UUID/offset bucket
+        __uuid_intermediate intermediate_uuid;
+        memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
+        ret = setup_intermediate_uuid(&intermediate_uuid, uuid, t_offset);
+        if (ret != 0) { return ret; }
+        ret = crc32_hash((char *)&intermediate_uuid, sizeof(intermediate_uuid), &hash);
+        if (ret != 0) { return ret; }
+        bucket = find_bucket(hash, cc->chunks_total);
+
+        printf("Get: uuid=%s, off=%u\n", uuid, t_offset);
+        printf("Found bucket: %u\n", bucket);
+
+        *data = buf;
+
+        // Check if cached
+        zncc_chunk_info data_out;
+        if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, t_offset, &data_out) == 0) {
+            // Cached
+            hit++;
+            printf("Read from [zone,chunk]=[%u,%u]\n", data_out.zone, data_out.chunk);
+
+            int tret = zncc_read_chunk(cc, data_out, *data+done_bytes);
+            if (tret != 0) {
+                free(buf);
+                return -1;
+            }
+            t_offset+=cc->chunk_size;
+            done_bytes+=cc->chunk_size;
+        } else {
+            if (!called_s3) {
+                // Never called S3 on previous iteration
+                // Write offset based on reads done
+                cc->s3->callback_data.buffer = buf+done_bytes;
+                ret = zncc_s3_get(cc->s3, uuid, t_offset, size-done_bytes);
+                if (ret != 0) {
+                    dbg_printf("S3 get failed: uuid=%s, bucket=%u, offset=%u\n", uuid, bucket, t_offset);
+                    return ret;
+                }
+                called_s3 = 1;
+                printf("First S3 call at t_offset=%u\n", t_offset);
+            }
+
+            // Write chunk
+            uint32_t remaining = size - done_bytes;
             uint32_t write_now = cc->chunk_size;
             if (remaining < cc->chunk_size) {
                 write_now = remaining;
             }
 
-            dbg_printf("Writing: uuid=%s, bucket=%u, offset=%ld, size=%u, data=0x%" PRIXPTR "\n",
-                       uuid, bucket, t_offset, write_now, (uintptr_t)cc->s3->callback_data.buffer+written);
-            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+written);
+            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+done_bytes);
             if (ret != 0) {
                 dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
                 return ret;
             }
-            t_offset += write_now;
-            written += write_now;
-        }
-
-        *data = cc->s3->callback_data.buffer;
-    } else {
-        hit++;
-        *data = buf;
-        dbg_printf("Read from chunk\n");
-        uint32_t num_chunk = adjusted_size / cc->chunk_size;
-        uint32_t offset = 0;
-        for (int offset = 0; offset < adjusted_size; offset+=cc->chunk_size) {
-            // TODO: Multi-chunk
-            int tret = zncc_read_chunk(cc, data_out, *data+offset);
-            if (tret != 0) {
-                free(buf);
-                return -1;
-            }
+            t_offset+=write_now;
+            done_bytes+=write_now;
         }
     }
 

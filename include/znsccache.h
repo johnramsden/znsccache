@@ -34,6 +34,7 @@ typedef struct zncc_bucket_list {
 
 typedef struct zncc_epoch_chunk {
     uint64_t chunk_time;
+    uint64_t chunk_bucket;
 } zncc_epoch_chunk;
 
 typedef struct zncc_epoch_list {
