@@ -34,7 +34,8 @@ typedef struct zncc_bucket_list {
 
 typedef struct zncc_epoch_chunk {
     uint64_t chunk_time;
-    uint64_t chunk_bucket;
+    zncc_bucket_node *chunk_bucket_node;
+    zncc_bucket_list *chunk_bucket_list;
 } zncc_epoch_chunk;
 
 typedef struct zncc_epoch_list {
@@ -53,6 +54,8 @@ int
 zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out);
 void
 zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data);
+void
+zncc_bucket_push_front_node(zncc_bucket_list *list, zncc_chunk_info data, zncc_bucket_node ** node);
 int
 zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                          zncc_chunk_info *data_out);
