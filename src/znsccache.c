@@ -56,7 +56,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     int ret;
 
     // 32K objects
-    size_t xf = 32*1024;
+    size_t xf = 1024*1024*1024;
     // size_t xf = 512*1024*1024;
 
     FILE *file;
@@ -69,7 +69,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 2621440;
+    int total = 800;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
@@ -171,28 +171,18 @@ test_s3_latency(zncc_chunkcache *cc) {
 // * 1M obj   - chunk sz 512K, 1M   - evict, no evict - S3 avg 1M get
 // * 1G obj   - chunk sz 512M, 1G   - evict, no evict - S3 avg 1G get
     int ret = 0;
-    size_t xf = 1*1024*1024*1024;
+    size_t xf = 1024*1024;
 
     struct timespec start, end;
 
-    #define GET_T_SZ 15
+    #define GET_T_SZ 5
     double times[GET_T_SZ];
     char *test[GET_T_SZ][2] = {
-        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
-        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
-        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
-        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
-        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
-        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
-        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
-        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
-        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
-        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
-        {"28cde48f-2c60-43b6-b6b9-76556fafc0ed", "s"},
-        {"f939bcfc-6e73-4f14-aa58-e630df39e89f", "t"},
-        {"35e96113-87e0-42f6-97ea-ce97971801a2", "u"},
-        {"2fc318fd-8ec2-4307-b995-20b933d7dcd9", "v"},
-        {"57468674-a34d-48ef-9a64-aa7f86e26fba", "w"},
+{"16a4b4e1-b8e5-4e95-b138-486a57b0a111", "s"},
+{"3fd031ba-6fac-426a-965f-dfda69d0126a", "t"},
+{"f96ca7ac-ce91-423e-ad4e-74cb8f735d38", "u"},
+{"5d9d3835-f34b-4cdd-a0d5-796781cfb50f", "v"},
+{"41378de9-d85e-43cf-b90e-c785af3762fc", "w"}
                                };
 
     double sum = 0;
@@ -202,25 +192,28 @@ test_s3_latency(zncc_chunkcache *cc) {
     if (buf == NULL) {
         nomem();
     }
-    for (int i = 0; i < GET_T_SZ; i++) {
-        char *v1;
 
-        cc->s3->callback_data.buffer = buf;
+    for (int i = 0; i < 20; i++) {
+        for (int j = 0; j < GET_T_SZ; j++) {
+            char *v1;
 
-        TIME_NOW(&start);
-        ret = zncc_s3_get(cc->s3, test[i][0], 0, xf);
-        if (ret != 0) {
-            printf("S3 get failed %d\n", i);
-            return ret;
+            cc->s3->callback_data.buffer = buf;
+
+            TIME_NOW(&start);
+            ret = zncc_s3_get(cc->s3, test[j][0], 0, xf);
+            if (ret != 0) {
+                printf("S3 get failed %d\n", j);
+                return ret;
+            }
+            TIME_NOW(&end);
+
+            times[j] = TIME_DIFFERENCE_MILLISEC(start, end);
+            sum += times[j];
+            printf("%f,\n", times[j]);
         }
-        TIME_NOW(&end);
-
-        times[i] = TIME_DIFFERENCE_MILLISEC(start, end);
-        sum += times[i];
-        printf("%d=%f\n", i, times[i]);
     }
 
-    printf("avg=%f\n", sum / GET_T_SZ);
+    printf("avg=%f\n", (sum / (GET_T_SZ*20)));
 
     return ret;
 }

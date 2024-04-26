@@ -1,7 +1,7 @@
 IDIR =../include
 IEXTRADIR =/data/john/libs/include
 CC=gcc
-CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g -fsanitize=address -static-libasan
+CFLAGS=-I$(IDIR) -I$(IEXTRADIR) -g # -fsanitize=address -static-libasan
 
 # define DEBUG in the source if we are debugging
 ifeq ($(DEBUG), 1)
