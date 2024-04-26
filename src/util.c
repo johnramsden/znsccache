@@ -8,9 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uuid/uuid.h>
 #include <time.h>
-#include <errno.h>
+#include <uuid/uuid.h>
 
 /**
  * @brief Exit if NOMEM
@@ -142,8 +141,8 @@ read_credentials(const char *filename, char **key, char **secret, char **bucket,
 unsigned long
 microsec_since_epoch() {
     struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return tv.tv_sec*(uint64_t)1000000+tv.tv_usec;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * (uint64_t) 1000000 + tv.tv_usec;
 }
 
 /**
@@ -151,7 +150,8 @@ microsec_since_epoch() {
  *
  * https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
  */
-int msleep(long msec) {
+int
+msleep(long msec) {
     struct timespec ts;
     int res;
 

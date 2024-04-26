@@ -73,8 +73,9 @@ zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t of
  * @param node Node to remove
  */
 void
-zncc_bucket_remove(zncc_bucket_list* list, zncc_bucket_node* node) {
-    if (node == NULL) return;
+zncc_bucket_remove(zncc_bucket_list *list, zncc_bucket_node *node) {
+    if (node == NULL)
+        return;
 
     // Update the next pointer of the previous node, if not removing head
     if (node->prev != NULL) {

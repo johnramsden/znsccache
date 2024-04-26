@@ -8,11 +8,11 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <libzbd/zbd.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
-#include <stdarg.h>
+#include <unistd.h>
 
 int evictions = 0;
 int evict_errors = 0;
@@ -73,9 +73,10 @@ zncc_evict(zncc_chunkcache *cc) {
         }
 
         if ((evictable_ind[largest_evictable_ind] == -1) ||
-            (cc->epoch_list[i].time_sum < evictable[largest_evictable_ind]) ) {
-            // printf("Setting evictable[%d]=%lu.\n", largest_evictable_ind, cc->epoch_list[i].time_sum);
-            // printf("Setting evictable_ind[%d]=%d.\n", largest_evictable_ind, i);
+            (cc->epoch_list[i].time_sum < evictable[largest_evictable_ind])) {
+            // printf("Setting evictable[%d]=%lu.\n", largest_evictable_ind,
+            // cc->epoch_list[i].time_sum); printf("Setting evictable_ind[%d]=%d.\n",
+            // largest_evictable_ind, i);
             evictable[largest_evictable_ind] = cc->epoch_list[i].time_sum;
             evictable_ind[largest_evictable_ind] = i;
         }
@@ -84,7 +85,8 @@ zncc_evict(zncc_chunkcache *cc) {
     uint32_t zones_remain = cc->zones_total - full_zones;
     struct timespec fz_ts;
     TIME_NOW(&fz_ts);
-    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(fz_ts), METRIC_FREE_ZONES, zones_remain);
+    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(fz_ts), METRIC_FREE_ZONES,
+                  zones_remain);
     if (zones_remain > EVICT_THRESH_ZONES_LEFT) {
         dbg_printf("%u zones remain, not evicting.\n", zones_remain);
         // No evict
@@ -93,7 +95,8 @@ zncc_evict(zncc_chunkcache *cc) {
 
     struct timespec evict_ts;
     TIME_NOW(&evict_ts);
-    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(evict_ts), METRIC_EVICTION, ++evictions);
+    metric_printf(cc->metrics_fd, "%f,%s,%d\n", SINCE_BEGIN(evict_ts), METRIC_EVICTION,
+                  ++evictions);
 
     dbg_printf("%u zones remain, evicting.\n", zones_remain);
 
@@ -106,7 +109,8 @@ zncc_evict(zncc_chunkcache *cc) {
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
         if (evictable_ind[i] == -1) {
             evict_errors++;
-            fprintf(stdout, "WARNING, evictable_ind[%d]=%d, error=%d\n", i, evictable_ind[i], evict_errors);
+            fprintf(stdout, "WARNING, evictable_ind[%d]=%d, error=%d\n", i, evictable_ind[i],
+                    evict_errors);
             continue;
         }
         dbg_printf("Evicting zone %d.\n", evictable_ind[i]);
@@ -115,10 +119,13 @@ zncc_evict(zncc_chunkcache *cc) {
         for (int j = 0; j < cc->chunks_per_zone; j++) {
             cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_time = cc->cache_epoch;
             if (cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node != NULL) {
-                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list, 0);
-                zncc_bucket_remove(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
-                                cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node);
-                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list, 1);
+                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
+                // 0);
+                zncc_bucket_remove(
+                    cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
+                    cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node);
+                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
+                // 1);
             }
 
             cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node = NULL;
@@ -134,7 +141,7 @@ zncc_evict(zncc_chunkcache *cc) {
 
         // Place in free list
         zncc_bucket_push_back(&cc->free_list,
-                            (zncc_chunk_info){.chunk = 0, .zone = evictable_ind[i]});
+                              (zncc_chunk_info){.chunk = 0, .zone = evictable_ind[i]});
 
         dbg_printf("Evicted zone %u, lowest epoch sum=%lu.\n", evictable_ind[i], evictable[i]);
     }
@@ -154,7 +161,7 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num) {
             break;
         }
         dbg_printf("[b=%u] (zone=%u,chunk=%u,uuid=%s)\n", b_num, b->data.zone, b->data.chunk,
-               b->data.uuid);
+                   b->data.uuid);
         b = b->next;
     }
 }
@@ -263,7 +270,8 @@ cleanup:
     free(zones);
     TIME_NOW(&end);
     double t_now = SINCE_BEGIN(end);
-    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_READ, TIME_DIFFERENCE_MILLISEC(start, end));
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_READ,
+                  TIME_DIFFERENCE_MILLISEC(start, end));
     return ret;
 }
 
@@ -277,7 +285,7 @@ cleanup:
  * @return int     Non-zero on error
  */
 static int
-write_out(int fd, size_t to_write, char * buffer, ssize_t write_size, unsigned long long wp_start) {
+write_out(int fd, size_t to_write, char *buffer, ssize_t write_size, unsigned long long wp_start) {
     int ret = 0;
 
     ssize_t bytes_written;
@@ -285,9 +293,10 @@ write_out(int fd, size_t to_write, char * buffer, ssize_t write_size, unsigned l
 
     errno = 0;
     while (total_written < to_write) {
-        bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start+total_written);
+        bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start + total_written);
         fsync(fd);
-        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written, wp_start+total_written);
+        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written,
+        // wp_start+total_written);
         if ((bytes_written == -1) || (errno != 0)) {
             dbg_printf("Error: %s\n", strerror(errno));
             dbg_printf("Couldn't write to fd\n");
@@ -348,19 +357,23 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
     }
     dbg_printf("write [zone,chunk]=[%d,%d]\n", chunk_info.zone, chunk_info.chunk);
 
-    dbg_printf("zone %u write pointer: %llu, zone size=%u, chunk size=%u\n",
-    chunk_info.zone, zones[chunk_info.zone].wp, cc->zone_size, cc->chunk_size);
-    dbg_printf("Chunk pointer: %lu\n", CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
+    dbg_printf("zone %u write pointer: %llu, zone size=%u, chunk size=%u\n", chunk_info.zone,
+               zones[chunk_info.zone].wp, cc->zone_size, cc->chunk_size);
+    dbg_printf("Chunk pointer: %lu\n",
+               CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
     // ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
 
-    // printf("((%u) * (%d)) + ((%d) * (%d))=%d\n", cc->zone_size, chunk_info.zone, chunk_info.chunk,
-    //         cc->chunk_size, (((cc->zone_size) * (chunk_info.zone)) + ((chunk_info.chunk) * (cc->chunk_size))));
+    // printf("((%u) * (%d)) + ((%d) * (%d))=%d\n", cc->zone_size, chunk_info.zone,
+    // chunk_info.chunk,
+    //         cc->chunk_size, (((cc->zone_size) * (chunk_info.zone)) + ((chunk_info.chunk) *
+    //         (cc->chunk_size))));
     assert(CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone) ==
            zones[chunk_info.zone].wp);
 
     unsigned long long wp_old = zones[chunk_info.zone].wp;
-    ret = write_out(fd, cc->chunk_size, data, WRITE_GRANULARITY,
-                    CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
+    ret =
+        write_out(fd, cc->chunk_size, data, WRITE_GRANULARITY,
+                  CHUNK_POINTER(cc->zone_size, cc->chunk_size, chunk_info.chunk, chunk_info.zone));
     if (ret != 0) {
         goto cleanup;
     }
@@ -378,7 +391,7 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         fprintf(stderr, "Failed to close zone\n");
     }
 
-    if (chunk_info.chunk >= (cc->chunks_per_zone-1)) {
+    if (chunk_info.chunk >= (cc->chunks_per_zone - 1)) {
         ret = zbd_finish_zones(fd, zone_ptr, 1);
         if (ret != 0) {
             fprintf(stderr, "Failed to finish zone\n");
@@ -390,7 +403,8 @@ cleanup:
     free(zones);
     TIME_NOW(&end);
     double t_now = SINCE_BEGIN(end);
-    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_WRITE, TIME_DIFFERENCE_MILLISEC(start, end));
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_WRITE,
+                  TIME_DIFFERENCE_MILLISEC(start, end));
     return ret;
 }
 
@@ -487,7 +501,7 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 
 static void
 update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full,
-             zncc_bucket_node *chunk_bucket_node, zncc_bucket_list * chunk_bucket_list) {
+             zncc_bucket_node *chunk_bucket_node, zncc_bucket_list *chunk_bucket_list) {
     assert(cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_node == NULL);
     assert(cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_list == NULL);
     cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_node = chunk_bucket_node;
@@ -496,8 +510,8 @@ update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full,
     uint64_t new_epoch = microsec_since_epoch();
     dbg_printf("EPOCH AVG OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     // Update total epoch avg
-    cc->epoch_list[zi->zone].time_sum = update_average(
-        cc->epoch_list[zi->zone].time_sum, cc->zones_total, old_epoch, new_epoch);
+    cc->epoch_list[zi->zone].time_sum =
+        update_average(cc->epoch_list[zi->zone].time_sum, cc->zones_total, old_epoch, new_epoch);
     cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_time = new_epoch;
     cc->epoch_list[zi->zone].full = full;
     dbg_printf("EPOCH AVG NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
@@ -543,11 +557,12 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
     // Add next chunk in zone to free list
     if (zi.chunk < (cc->chunks_per_zone - 1)) {
         zncc_bucket_push_back(&cc->free_list,
-                               (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
+                              (zncc_chunk_info){.chunk = zi.chunk + 1, .zone = zi.zone});
         // print_free_list(&cc->free_list);
     }
 
-    update_epoch(cc, &zi, zi.chunk >= (cc->chunks_per_zone-1), chunk_bucket_node, &cc->buckets[bucket]);
+    update_epoch(cc, &zi, zi.chunk >= (cc->chunks_per_zone - 1), chunk_bucket_node,
+                 &cc->buckets[bucket]);
 
     return 0;
 }
@@ -575,7 +590,7 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
 
     // Use chunk multiple
     size_t adjusted_size = adjust_size_to_multiple(size, cc->chunk_size);
-    char * buf = malloc(adjusted_size);
+    char *buf = malloc(adjusted_size);
     if (buf == NULL) {
         nomem();
     }
@@ -595,9 +610,13 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
         __uuid_intermediate intermediate_uuid;
         memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
         ret = setup_intermediate_uuid(&intermediate_uuid, uuid, t_offset);
-        if (ret != 0) { return ret; }
-        ret = crc32_hash((char *)&intermediate_uuid, sizeof(intermediate_uuid), &hash);
-        if (ret != 0) { return ret; }
+        if (ret != 0) {
+            return ret;
+        }
+        ret = crc32_hash((char *) &intermediate_uuid, sizeof(intermediate_uuid), &hash);
+        if (ret != 0) {
+            return ret;
+        }
         bucket = find_bucket(hash, cc->chunks_total);
 
         dbg_printf("Get: uuid=%s, off=%u\n", uuid, t_offset);
@@ -612,21 +631,22 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             hit++;
             dbg_printf("Read from [zone,chunk]=[%u,%u]\n", data_out.zone, data_out.chunk);
 
-            int tret = zncc_read_chunk(cc, data_out, *data+done_bytes);
+            int tret = zncc_read_chunk(cc, data_out, *data + done_bytes);
             if (tret != 0) {
                 free(buf);
                 return -1;
             }
-            t_offset+=cc->chunk_size;
-            done_bytes+=cc->chunk_size;
+            t_offset += cc->chunk_size;
+            done_bytes += cc->chunk_size;
         } else {
             if (!called_s3) {
                 // Never called S3 on previous iteration
                 // Write offset based on reads done
-                cc->s3->callback_data.buffer = buf+done_bytes;
-                ret = zncc_s3_get(cc->s3, uuid, t_offset, size-done_bytes);
+                cc->s3->callback_data.buffer = buf + done_bytes;
+                ret = zncc_s3_get(cc->s3, uuid, t_offset, size - done_bytes);
                 if (ret != 0) {
-                    dbg_printf("S3 get failed: uuid=%s, bucket=%u, offset=%u\n", uuid, bucket, t_offset);
+                    dbg_printf("S3 get failed: uuid=%s, bucket=%u, offset=%u\n", uuid, bucket,
+                               t_offset);
                     return ret;
                 }
                 called_s3 = 1;
@@ -640,22 +660,24 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
                 write_now = remaining;
             }
 
-            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+done_bytes);
+            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now,
+                                     cc->s3->callback_data.buffer + done_bytes);
             if (ret != 0) {
                 dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
                 return ret;
             }
-            t_offset+=write_now;
-            done_bytes+=write_now;
+            t_offset += write_now;
+            done_bytes += write_now;
         }
     }
 
     TIME_NOW(&end);
     double t_now = SINCE_BEGIN(end);
-    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_HITRATE, (float)hit / accesses);
-    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_GET, TIME_DIFFERENCE_MILLISEC(start, end));
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_HITRATE, (float) hit / accesses);
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_GET,
+                  TIME_DIFFERENCE_MILLISEC(start, end));
 
-    dbg_printf("accesses=%d, hit rate=%.4f\n", accesses, (float)hit / accesses);
+    dbg_printf("accesses=%d, hit rate=%.4f\n", accesses, (float) hit / accesses);
 
     return zncc_evict(cc);
 }
@@ -731,7 +753,8 @@ init_epoch_list(zncc_chunkcache *cc) {
  * @return int           Non-zero on error
  */
 int
-zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3, char const *const metrics_file) {
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3,
+          char const *const metrics_file) {
     int ret = 0;
     struct zbd_info info;
 
@@ -791,8 +814,10 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     }
 
     dbg_printf("Initialized chunk cache:\n"
-               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%u\npblock_size=%u\n",
-               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size, info.pblock_size);
+               "device=%s\nchunks_per_zone=%u\nzones_total=%u\ntotal_chunks=%u\nchunks_size=%"
+               "u\npblock_size=%u\n",
+               device, cc->chunks_per_zone, cc->zones_total, cc->chunks_total, cc->chunk_size,
+               info.pblock_size);
 
     dbg_printf("zone_size (bytes)=%llu\n", info.zone_size);
 
@@ -810,7 +835,6 @@ zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zn
     fflush(cc->metrics_fd);
 
     TIME_NOW(&started_zncc);
-
 
 cleanup:
     zbd_close(fd);

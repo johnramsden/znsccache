@@ -4,9 +4,9 @@
 #include "util.h"
 
 #include <libs3.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdbool.h>
 
 #define UUID_SIZE 37
 
@@ -55,7 +55,7 @@ zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out);
 void
 zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data);
 void
-zncc_bucket_push_front_node(zncc_bucket_list *list, zncc_chunk_info data, zncc_bucket_node ** node);
+zncc_bucket_push_front_node(zncc_bucket_list *list, zncc_chunk_info data, zncc_bucket_node **node);
 int
 zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                          zncc_chunk_info *data_out);
@@ -63,7 +63,7 @@ int
 zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                         zncc_chunk_info *data_out);
 void
-zncc_bucket_remove(zncc_bucket_list* list, zncc_bucket_node* node);
+zncc_bucket_remove(zncc_bucket_list *list, zncc_bucket_node *node);
 // s3
 // Callback data structure
 typedef struct zncc_get_object_callback_data {
@@ -112,7 +112,8 @@ typedef struct zncc_chunkcache {
 // int
 // zncc_put(zncc_chunkcache *cc, char const *const uuid, char *data);
 int
-zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3, char const *const metrics_file);
+zncc_init(zncc_chunkcache *cc, char const *const device, uint64_t chunk_size, zncc_s3 *s3,
+          char const *const metrics_file);
 void
 zncc_destroy(zncc_chunkcache *cc);
 int
@@ -127,5 +128,9 @@ print_bucket(zncc_bucket_list *bucket, uint32_t b_num);
 void
 print_free_list(zncc_bucket_list *bucket);
 
-#define metric_printf(FD, M, ...) do { if (FD != NULL) fprintf(FD, M, ##__VA_ARGS__);} while(0)
+#define metric_printf(FD, M, ...)                                                                  \
+    do {                                                                                           \
+        if (FD != NULL)                                                                            \
+            fprintf(FD, M, ##__VA_ARGS__);                                                         \
+    } while (0)
 #endif

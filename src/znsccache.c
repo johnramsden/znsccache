@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define S3_BUFF_SZ (8192*1024)
+#define S3_BUFF_SZ (8192 * 1024)
 
 /**
  * https://github.com/westerndigitalcorporation/libzbd/blob/master/include/libzbd/zbd.h
@@ -50,17 +50,16 @@ test_ll(zncc_chunkcache *cc) {
     }
 }
 
-
 int
 test_get(zncc_chunkcache *cc, char *test_file) {
     int ret;
 
     // 32K objects
-    size_t xf = 1024*1024*1024;
+    size_t xf = 1024 * 1024 * 1024;
     // size_t xf = 512*1024*1024;
 
     FILE *file;
-    char line[40];  // Adjust buffer size as needed
+    char line[40]; // Adjust buffer size as needed
 
     file = fopen(test_file, "r");
     if (file == NULL) {
@@ -76,7 +75,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
         line[36] = '\0';
 
         if (count % 5000 == 0) {
-            printf("%d / %d (%.4f): %s\n", count, total, (float)count / total, line);
+            printf("%d / %d (%.4f): %s\n", count, total, (float) count / total, line);
         }
         ret = zncc_get(cc, line, 0, xf, &v1);
         if (ret != 0) {
@@ -98,7 +97,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
 }
 
 static int
-basic_write_test(char * device) {
+basic_write_test(char *device) {
     int ret = 0;
     struct zbd_info info;
     int fd = zbd_open(device, O_RDWR, &info);
@@ -112,15 +111,14 @@ basic_write_test(char * device) {
     // capacity will be reported.
     off_t ofst = 0;
     off_t len = 0;
-    size_t sz = info.nr_zones*(sizeof(struct zbd_zone));
+    size_t sz = info.nr_zones * (sizeof(struct zbd_zone));
     struct zbd_zone *zones = malloc(sz);
     if (zones == NULL) {
         fprintf(stderr, "Couldn't allocate %lu bytes for zones\n", sz);
         return -1;
     }
     unsigned int nr_zones = info.nr_zones;
-    ret = zbd_report_zones(fd, ofst, len,
-                            ZBD_RO_ALL, zones, &nr_zones);
+    ret = zbd_report_zones(fd, ofst, len, ZBD_RO_ALL, zones, &nr_zones);
     if (ret != 0) {
         fprintf(stderr, "Couldn't report zone info\n");
         return ret;
@@ -138,8 +136,8 @@ basic_write_test(char * device) {
         goto cleanup;
     }
 
-    size_t to_write = 512*1024*1024;
-    char * buffer = malloc(to_write);
+    size_t to_write = 512 * 1024 * 1024;
+    char *buffer = malloc(to_write);
     ssize_t bytes_written;
     size_t total_written = 0;
     ssize_t chunk_size = 4096; // Size of each write, e.g., 4 KiB
@@ -166,29 +164,27 @@ cleanup:
 int
 test_s3_latency(zncc_chunkcache *cc) {
 
-// * 32K obj  - chunk sz 16K, 32K   - evict, no evict - S3 avg 32K get
-// * 512K obj - chunk sz 256K, 512K - evict, no evict - S3 avg 512K get
-// * 1M obj   - chunk sz 512K, 1M   - evict, no evict - S3 avg 1M get
-// * 1G obj   - chunk sz 512M, 1G   - evict, no evict - S3 avg 1G get
+    // * 32K obj  - chunk sz 16K, 32K   - evict, no evict - S3 avg 32K get
+    // * 512K obj - chunk sz 256K, 512K - evict, no evict - S3 avg 512K get
+    // * 1M obj   - chunk sz 512K, 1M   - evict, no evict - S3 avg 1M get
+    // * 1G obj   - chunk sz 512M, 1G   - evict, no evict - S3 avg 1G get
     int ret = 0;
-    size_t xf = 1024*1024;
+    size_t xf = 1024 * 1024;
 
     struct timespec start, end;
 
-    #define GET_T_SZ 5
+#define GET_T_SZ 5
     double times[GET_T_SZ];
-    char *test[GET_T_SZ][2] = {
-{"16a4b4e1-b8e5-4e95-b138-486a57b0a111", "s"},
-{"3fd031ba-6fac-426a-965f-dfda69d0126a", "t"},
-{"f96ca7ac-ce91-423e-ad4e-74cb8f735d38", "u"},
-{"5d9d3835-f34b-4cdd-a0d5-796781cfb50f", "v"},
-{"41378de9-d85e-43cf-b90e-c785af3762fc", "w"}
-                               };
+    char *test[GET_T_SZ][2] = {{"16a4b4e1-b8e5-4e95-b138-486a57b0a111", "s"},
+                               {"3fd031ba-6fac-426a-965f-dfda69d0126a", "t"},
+                               {"f96ca7ac-ce91-423e-ad4e-74cb8f735d38", "u"},
+                               {"5d9d3835-f34b-4cdd-a0d5-796781cfb50f", "v"},
+                               {"41378de9-d85e-43cf-b90e-c785af3762fc", "w"}};
 
     double sum = 0;
 
     size_t adjusted_size = adjust_size_to_multiple(xf, cc->chunk_size);
-    char * buf = malloc(adjusted_size);
+    char *buf = malloc(adjusted_size);
     if (buf == NULL) {
         nomem();
     }
@@ -213,7 +209,7 @@ test_s3_latency(zncc_chunkcache *cc) {
         }
     }
 
-    printf("avg=%f\n", (sum / (GET_T_SZ*20)));
+    printf("avg=%f\n", (sum / (GET_T_SZ * 20)));
 
     return ret;
 }
