@@ -95,6 +95,15 @@ Finished uploading. Total uploaded size: 4294967296 bytes.
 
 ## Benchmarks
 
+Set:
+
+* xf
+* zones
+* file
+* count
+* -s bytes
+* -m output
+
 ```
 timestamp,type,time (ms)
 ```
@@ -108,25 +117,27 @@ Record:
 
 Bench:
 * 32K obj   - chunk sz 16K, 32K   - evict, no evict - S3 geomean 32K
-* 512K obj  - chunk sz 256K, 512K - evict, no evict - S3 geomean 512K
+<!-- * 512K obj  - chunk sz 256K, 512K - evict, no evict - S3 geomean 512K -->
 * 1M obj    - chunk sz 512K, 1M   - evict, no evict - S3 geomean 1M
-* 256M obj  - chunk sz 128M 256M  - evict, no evict - S3 geomean 256M
+<!-- * 256M obj  - chunk sz 128M 256M  - evict, no evict - S3 geomean 256M -->
 * 1G obj    - chunk sz 512M 1G    - evict, no evict - S3 geomean 1G
 
 * 32K obj   - chunk sz 16K, 32K   - evict, no evict - S3 geomean 32K
 
 Using 57ms for bench
 
+```c
+#define EVICT_THRESH_ZONES_LEFT 1
+#define EVICT_THRESH_ZONES_REMOVE 2
+```
+
 Evict
 
-'disk=16777216KB,obj=32KB,uuids=41943040iter=4194304.csv'
+'disk=10485760KB,obj=32KB,uuids=26214400iter=2621440.txt'
 
 No Evict:
 
-disk=16777216KB
-obj=32KB
-uuids=524288
-iter=4194304
+'disk=41943040KB,obj=1024KB,uuids=40960iter=327680.txt'
 
 ```
 make clean && DEBUG=0 EMULATE_S3=1 S3_DELAY=57 make
@@ -151,7 +162,7 @@ stdev=39.15
 geomean=57.36
 avg=66.007688
 
-* 512K obj  - chunk sz 256K, 512K - evict, no evict - S3 geomean 512K
+<!-- * 512K obj  - chunk sz 256K, 512K - evict, no evict - S3 geomean 512K
 
 Using 198ms for bench
 
@@ -191,19 +202,24 @@ iter=262144
 14=185.046569
 stdev=52.94
 geomean=197.93
-avg=205.054607
+avg=205.054607 -->
 
 * 1M obj    - chunk sz 512K, 1M   - evict, no evict - S3 geomean 1M
 
 Evict:
 
-disk=16777216KB,obj=1024KB,uuids=1310720iter=131072
+'disk=41943040KB,obj=1024KB,uuids=3276800iter=327680.txt'
 
 No Evict:
 
-disk=16777216KB,obj=1024KB,uuids=16384iter=131072
+'disk=41943040KB,obj=1024KB,uuids=40960iter=327680.txt'
 
 Using 273ms for bench
+
+```c
+#define EVICT_THRESH_ZONES_LEFT 1
+#define EVICT_THRESH_ZONES_REMOVE 8
+```
 
 0=411.901749
 1=384.584974
@@ -224,7 +240,7 @@ stdev=60.55
 geomean=272.69
 avg=279.015874
 
-* 256M obj  - chunk sz 128M 256M  - evict, no evict - S3 geomean 256M
+<!-- * 256M obj  - chunk sz 128M 256M  - evict, no evict - S3 geomean 256M
 
 Using 5974ms for bench
 
@@ -248,14 +264,25 @@ disk=16777216KB,obj=262144KB,uuids=5120iter=512
 14=4086.082339
 stdev=3794.30
 geomean=5974.46
-avg=6623.291940
+avg=6623.291940 -->
 
 * 1G obj    - chunk sz 512M 1G    - evict, no evict - S3 geomean 1G
 
 Using 24343ms for bench
 
-disk=16777216KB,obj=1048576KB,uuids=1280iter=128
-disk=16777216KB,obj=1048576KB,uuids=16iter=128
+```c
+#define EVICT_THRESH_ZONES_LEFT 1
+#define EVICT_THRESH_ZONES_REMOVE 20
+```
+
+Evict:
+
+'disk=104857600KB,obj=1048576KB,uuids=8000iter=800.txt'
+
+No Evict:
+
+'disk=104857600KB,obj=1048576KB,uuids=100iter=800.txt'
+
 
 0=43754.830457
 1=27948.829392
@@ -276,28 +303,10 @@ stdev=7505.53
 geomean=24343.18
 avg=25337.211095
 
-* 1G obj    - chunk sz 512M 1G    - evict, no evict - S3 geomean 1G
 
-Using 24343ms for bench
-
-disk=67108864KB,obj=1048576KB,uuids=64iter=512
-disk=67108864KB,obj=1048576KB,uuids=5120iter=512
-
-0=43754.830457
-1=27948.829392
-2=20282.773869
-3=24346.867982
-4=18599.868245
-5=19434.322517
-6=21626.409352
-7=20666.890445
-8=20143.417247
-9=18520.894672
-10=16242.383070
-11=35398.169103
-12=32120.796345
-13=30162.610940
-14=30809.102791
-stdev=7505.53
-geomean=24343.18
-avg=25337.211095
+'disk=10485760KB,obj=32KB,uuids=26214400iter=2621440'
+'disk=10485760KB,obj=32KB,uuids=327680iter=2621440'
+'disk=41943040KB,obj=1024KB,uuids=3276800iter=327680'
+'disk=41943040KB,obj=1024KB,uuids=40960iter=327680'
+'disk=104857600KB,obj=1048576KB,uuids=100iter=800'
+'disk=104857600KB,obj=1048576KB,uuids=8000iter=800'

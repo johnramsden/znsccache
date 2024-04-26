@@ -69,7 +69,7 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 512;
+    int total = 2621440;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;

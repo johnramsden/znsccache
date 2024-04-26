@@ -25,8 +25,8 @@ struct timespec started_zncc;
 #define EPOCH_MAX 18446744073709551615UL
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 1
-#define EVICT_THRESH_ZONES_REMOVE 8
-#define ZONES_USED 64
+#define EVICT_THRESH_ZONES_REMOVE 2
+#define ZONES_USED 10
 #define METRIC_BUFFER_CHARS 100000
 
 #define METRIC_HITRATE "hitrate"
@@ -103,8 +103,6 @@ zncc_evict(zncc_chunkcache *cc) {
         return fd;
     }
 
-    // Set epoch
-    uint64_t epoch_now = microsec_since_epoch();
     for (int i = 0; i < EVICT_THRESH_ZONES_REMOVE; i++) {
         if (evictable_ind[i] == -1) {
             evict_errors++;
@@ -113,9 +111,18 @@ zncc_evict(zncc_chunkcache *cc) {
         }
         dbg_printf("Evicting zone %d.\n", evictable_ind[i]);
         cc->epoch_list[evictable_ind[i]].full = false;
-        cc->epoch_list[evictable_ind[i]].time_sum = epoch_now*cc->chunks_per_zone;
+        cc->epoch_list[evictable_ind[i]].time_sum = cc->cache_epoch;
         for (int j = 0; j < cc->chunks_per_zone; j++) {
-            cc->epoch_list[evictable_ind[i]].chunk_times[j] = epoch_now;
+            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_time = cc->cache_epoch;
+            if (cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node != NULL) {
+                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list, 0);
+                zncc_bucket_remove(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list,
+                                cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node);
+                // print_bucket(cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list, 1);
+            }
+
+            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_node = NULL;
+            cc->epoch_list[evictable_ind[i]].epoch_chunks[j].chunk_bucket_list = NULL;
         }
 
         uint64_t zone_ptr = CHUNK_POINTER(cc->zone_size, cc->chunk_size, 0, evictable_ind[i]);
@@ -160,7 +167,7 @@ print_free_list(zncc_bucket_list *bucket) {
         if (b == NULL) {
             break;
         }
-        printf("(zone=%u,chunk=%u)\n", b->data.zone, b->data.chunk);
+        dbg_printf("(zone=%u,chunk=%u)\n", b->data.zone, b->data.chunk);
         b = b->next;
     }
 }
@@ -479,14 +486,19 @@ setup_intermediate_uuid(__uuid_intermediate *intermediate_uuid, char const *cons
 }
 
 static void
-update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full) {
-    uint64_t old_epoch = cc->epoch_list[zi->zone].chunk_times[zi->chunk];
+update_epoch(zncc_chunkcache *cc, zncc_chunk_info *zi, bool full,
+             zncc_bucket_node *chunk_bucket_node, zncc_bucket_list * chunk_bucket_list) {
+    assert(cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_node == NULL);
+    assert(cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_list == NULL);
+    cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_node = chunk_bucket_node;
+    cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_bucket_list = chunk_bucket_list;
+    uint64_t old_epoch = cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_time;
     uint64_t new_epoch = microsec_since_epoch();
     dbg_printf("EPOCH AVG OLD for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     // Update total epoch avg
     cc->epoch_list[zi->zone].time_sum = update_average(
         cc->epoch_list[zi->zone].time_sum, cc->zones_total, old_epoch, new_epoch);
-    cc->epoch_list[zi->zone].chunk_times[zi->chunk] = new_epoch;
+    cc->epoch_list[zi->zone].epoch_chunks[zi->chunk].chunk_time = new_epoch;
     cc->epoch_list[zi->zone].full = full;
     dbg_printf("EPOCH AVG NEW for zone=%lu\n", cc->epoch_list[zi->zone].time_sum);
     dbg_printf("EPOCH OLD for chunk=%lu\n", old_epoch);
@@ -524,8 +536,9 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
         return ret;
     }
 
-    // Add to bucket
-    zncc_bucket_push_front(&cc->buckets[bucket], zi);
+    // Add to bucket, set chunk_bucket_node for later eviction
+    zncc_bucket_node *chunk_bucket_node;
+    zncc_bucket_push_front_node(&cc->buckets[bucket], zi, &chunk_bucket_node);
 
     // Add next chunk in zone to free list
     if (zi.chunk < (cc->chunks_per_zone - 1)) {
@@ -534,7 +547,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
         // print_free_list(&cc->free_list);
     }
 
-    update_epoch(cc, &zi, zi.chunk >= (cc->chunks_per_zone-1));
+    update_epoch(cc, &zi, zi.chunk >= (cc->chunks_per_zone-1), chunk_bucket_node, &cc->buckets[bucket]);
 
     return 0;
 }
@@ -544,7 +557,7 @@ zncc_put_in_bucket(zncc_chunkcache *cc, uint32_t bucket, char const *const uuid,
  *
  * @param cc
  * @param uuid   UUID string (MAX 37 bytes with \0)
- * @param offset
+ * @param offset Multiple of chunk
  * @param size
  * @param data
  * @return int
@@ -560,74 +573,80 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     int ret = 0;
     uint32_t bucket;
 
-    dbg_printf("Get: uuid=%s\n", uuid);
-
-    __uuid_intermediate intermediate_uuid;
-    memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
-
-    ret = setup_intermediate_uuid(&intermediate_uuid, uuid, offset);
-
-    uint32_t hash;
-    ret = crc32_hash((char *) &intermediate_uuid, sizeof(intermediate_uuid), &hash);
-    if (ret != 0) {
-        return ret;
-    }
-
-    bucket = find_bucket(hash, cc->chunks_total);
-
-    dbg_printf("Found bucket: %u\n", bucket);
-
-    zncc_chunk_info data_out;
-
     // Use chunk multiple
     size_t adjusted_size = adjust_size_to_multiple(size, cc->chunk_size);
     char * buf = malloc(adjusted_size);
     if (buf == NULL) {
         nomem();
     }
+    uint32_t num_chunk = adjusted_size / cc->chunk_size;
 
-    if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, offset, &data_out) != 0) {
-        cc->s3->callback_data.buffer = buf;
-        ret = zncc_s3_get(cc->s3, uuid, offset, size);
-        if (ret != 0) {
-            dbg_printf("S3 get failed: uuid=%s, bucket=%u\n", uuid, bucket);
-            return ret;
-        }
+    dbg_printf("Get: uuid=%s, off=%lu\n", uuid, offset);
 
-        off_t t_offset = offset;
-        uint32_t written = 0;
-        while (written < size) {
-            uint32_t remaining = size - written;
+    uint32_t hash;
+    uint32_t t_offset = offset;
+    uint32_t done_bytes = 0;
+    uint32_t accessed = 0;
+    uint32_t s3_buf_adjust = 0; // Adjust read location based on when S3 call occurred
+    int called_s3 = 0;
+    while (done_bytes < size) {
+
+        // Get UUID/offset bucket
+        __uuid_intermediate intermediate_uuid;
+        memset(&intermediate_uuid, 0, sizeof(intermediate_uuid));
+        ret = setup_intermediate_uuid(&intermediate_uuid, uuid, t_offset);
+        if (ret != 0) { return ret; }
+        ret = crc32_hash((char *)&intermediate_uuid, sizeof(intermediate_uuid), &hash);
+        if (ret != 0) { return ret; }
+        bucket = find_bucket(hash, cc->chunks_total);
+
+        dbg_printf("Get: uuid=%s, off=%u\n", uuid, t_offset);
+        dbg_printf("Found bucket: %u\n", bucket);
+
+        *data = buf;
+
+        // Check if cached
+        zncc_chunk_info data_out;
+        if (zncc_bucket_peek_by_uuid(&cc->buckets[bucket], uuid, t_offset, &data_out) == 0) {
+            // Cached
+            hit++;
+            dbg_printf("Read from [zone,chunk]=[%u,%u]\n", data_out.zone, data_out.chunk);
+
+            int tret = zncc_read_chunk(cc, data_out, *data+done_bytes);
+            if (tret != 0) {
+                free(buf);
+                return -1;
+            }
+            t_offset+=cc->chunk_size;
+            done_bytes+=cc->chunk_size;
+        } else {
+            if (!called_s3) {
+                // Never called S3 on previous iteration
+                // Write offset based on reads done
+                cc->s3->callback_data.buffer = buf+done_bytes;
+                ret = zncc_s3_get(cc->s3, uuid, t_offset, size-done_bytes);
+                if (ret != 0) {
+                    dbg_printf("S3 get failed: uuid=%s, bucket=%u, offset=%u\n", uuid, bucket, t_offset);
+                    return ret;
+                }
+                called_s3 = 1;
+                dbg_printf("First S3 call at t_offset=%u\n", t_offset);
+            }
+
+            // Write chunk
+            uint32_t remaining = size - done_bytes;
             uint32_t write_now = cc->chunk_size;
             if (remaining < cc->chunk_size) {
                 write_now = remaining;
             }
 
-            dbg_printf("Writing: uuid=%s, bucket=%u, offset=%ld, size=%u, data=0x%" PRIXPTR "\n",
-                       uuid, bucket, t_offset, write_now, (uintptr_t)cc->s3->callback_data.buffer+written);
-            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+written);
+            ret = zncc_put_in_bucket(cc, bucket, uuid, t_offset, write_now, cc->s3->callback_data.buffer+done_bytes);
             if (ret != 0) {
                 dbg_printf("Failed bucket put: uuid=%s, bucket=%u\n", uuid, bucket);
                 return ret;
             }
-            t_offset += write_now;
-            written += write_now;
-        }
-
-        *data = cc->s3->callback_data.buffer;
-    } else {
-        hit++;
-        *data = buf;
-        dbg_printf("Read from chunk\n");
-        uint32_t num_chunk = adjusted_size / cc->chunk_size;
-        uint32_t offset = 0;
-        for (int offset = 0; offset < adjusted_size; offset+=cc->chunk_size) {
-            // TODO: Multi-chunk
-            int tret = zncc_read_chunk(cc, data_out, *data+offset);
-            if (tret != 0) {
-                free(buf);
-                return -1;
-            }
+            t_offset+=write_now;
+            done_bytes+=write_now;
         }
     }
 
@@ -685,17 +704,20 @@ init_epoch_list(zncc_chunkcache *cc) {
     if (cc->epoch_list == NULL) {
         nomem();
     }
-    size_t sz_chunks = cc->chunks_per_zone * sizeof(uint64_t);
+    size_t sz_chunks = cc->chunks_per_zone * sizeof(zncc_epoch_chunk);
     uint64_t epoch_now = microsec_since_epoch();
+    cc->cache_epoch = epoch_now;
     for (int i = 0; i < cc->zones_total; i++) {
         cc->epoch_list[i].full = false;
-        cc->epoch_list[i].time_sum = epoch_now;
-        cc->epoch_list[i].chunk_times = malloc(sz_chunks);
-        if (cc->epoch_list[i].chunk_times == NULL) {
+        cc->epoch_list[i].time_sum = cc->cache_epoch;
+        cc->epoch_list[i].epoch_chunks = malloc(sz_chunks);
+        if (cc->epoch_list[i].epoch_chunks == NULL) {
             nomem();
         }
         for (int j = 0; j < cc->chunks_per_zone; j++) {
-            cc->epoch_list[i].chunk_times[j] = epoch_now;
+            cc->epoch_list[i].epoch_chunks[j].chunk_time = epoch_now;
+            cc->epoch_list[i].epoch_chunks[j].chunk_bucket_node = NULL;
+            cc->epoch_list[i].epoch_chunks[j].chunk_bucket_list = NULL;
         }
     }
 }

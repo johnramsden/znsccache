@@ -67,6 +67,35 @@ zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t of
 }
 
 /**
+ * @brief Remove node from list
+ *
+ * @param list Linked list
+ * @param node Node to remove
+ */
+void
+zncc_bucket_remove(zncc_bucket_list* list, zncc_bucket_node* node) {
+    if (node == NULL) return;
+
+    // Update the next pointer of the previous node, if not removing head
+    if (node->prev != NULL) {
+        node->prev->next = node->next;
+    } else {
+        // Node is the head
+        list->head = node->next;
+    }
+
+    // Update the prev pointer of the next node, if not removing tail
+    if (node->next != NULL) {
+        node->next->prev = node->prev;
+    } else {
+        // Node is the tail
+        list->tail = node->prev;
+    }
+
+    free(node);
+}
+
+/**
  * @brief Get a chunk item based on UUID
  *
  * @param list Linked list
@@ -153,8 +182,14 @@ zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out) {
     return 0;
 }
 
+/**
+ * @brief Push front but return node
+ *
+ * @param list
+ * @param data
+ */
 void
-zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data) {
+zncc_bucket_push_front_node(zncc_bucket_list *list, zncc_chunk_info data, zncc_bucket_node **node) {
     zncc_bucket_node *new = (zncc_bucket_node *) malloc(sizeof(zncc_bucket_node));
     if (new == NULL) {
         nomem();
@@ -173,5 +208,14 @@ zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data) {
 
     list->length++;
     list->head = new;
+
+    if (node != NULL) {
+        *node = new;
+    }
     dbg_printf("Push chunk=%u, zone=%u, new length=%u\n", data.chunk, data.zone, list->length);
+}
+
+void
+zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data) {
+    zncc_bucket_push_front_node(list, data, NULL);
 }

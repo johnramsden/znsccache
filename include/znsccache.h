@@ -32,10 +32,16 @@ typedef struct zncc_bucket_list {
     zncc_bucket_node *tail;
 } zncc_bucket_list;
 
+typedef struct zncc_epoch_chunk {
+    uint64_t chunk_time;
+    zncc_bucket_node *chunk_bucket_node;
+    zncc_bucket_list *chunk_bucket_list;
+} zncc_epoch_chunk;
+
 typedef struct zncc_epoch_list {
     uint64_t time_sum;
     bool full;
-    uint64_t *chunk_times;
+    zncc_epoch_chunk *epoch_chunks;
 } zncc_epoch_list;
 
 void
@@ -48,13 +54,16 @@ int
 zncc_bucket_pop_back(zncc_bucket_list *list, zncc_chunk_info *data_out);
 void
 zncc_bucket_push_front(zncc_bucket_list *list, zncc_chunk_info data);
+void
+zncc_bucket_push_front_node(zncc_bucket_list *list, zncc_chunk_info data, zncc_bucket_node ** node);
 int
 zncc_bucket_peek_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                          zncc_chunk_info *data_out);
 int
 zncc_bucket_pop_by_uuid(zncc_bucket_list *list, char const *const uuid, off_t offset,
                         zncc_chunk_info *data_out);
-
+void
+zncc_bucket_remove(zncc_bucket_list* list, zncc_bucket_node* node);
 // s3
 // Callback data structure
 typedef struct zncc_get_object_callback_data {
@@ -86,6 +95,7 @@ zncc_s3_get(zncc_s3 *ctx, char const *obj_id, uint64_t start_byte, uint64_t byte
 // CACHE
 
 typedef struct zncc_chunkcache {
+    uint64_t cache_epoch;
     uint32_t zone_size;
     uint32_t chunk_size;
     uint32_t chunks_total;
