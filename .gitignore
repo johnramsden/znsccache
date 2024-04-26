@@ -2,3 +2,4 @@
 src/znsccache
 /credentials.json
 /disk*
+.idea
