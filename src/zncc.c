@@ -34,6 +34,8 @@ struct timespec started_zncc;
 #define METRIC_GET "get"
 #define METRIC_READ "read"
 #define METRIC_WRITE "write"
+#define METRIC_CACHED "cached"
+#define METRIC_UNCACHED "uncach"
 #define METRIC_FREE_ZONES "freezones"
 
 char METRIC_BUFFER[METRIC_BUFFER_CHARS];
@@ -581,6 +583,7 @@ int
 zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t size, char **data) {
 
     struct timespec start, end;
+    struct timespec start_loop, end_cached,end_uncached;
     TIME_NOW(&start);
 
     accesses++;
@@ -604,6 +607,8 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
     uint32_t accessed = 0;
     uint32_t s3_buf_adjust = 0; // Adjust read location based on when S3 call occurred
     int called_s3 = 0;
+
+    TIME_NOW(&start_loop);
     while (done_bytes < size) {
 
         // Get UUID/offset bucket
@@ -638,6 +643,11 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             }
             t_offset += cc->chunk_size;
             done_bytes += cc->chunk_size;
+            TIME_NOW(&end_cached);
+            double t_now = SINCE_BEGIN(end_cached);
+            metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_CACHED,
+                  TIME_DIFFERENCE_MILLISEC(start_loop, end_cached));
+        }
         } else {
             if (!called_s3) {
                 // Never called S3 on previous iteration
@@ -668,7 +678,12 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             }
             t_offset += write_now;
             done_bytes += write_now;
+            TIME_NOW(&end_uncached);
+            double t_now = SINCE_BEGIN(end_uncached);
+            metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_UNCACHED,
+                  TIME_DIFFERENCE_MILLISEC(start_loop, end_uncached));
         }
+        TIME_NOW(&start_loop);
     }
 
     TIME_NOW(&end);

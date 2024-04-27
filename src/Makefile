@@ -12,7 +12,7 @@ ifeq ($(EMULATE_S3), 1)
 endif
 
 S3_DELAY ?= 1
-CFLAGS+=-DS3_DELAY
+CFLAGS+=-DS3_DELAY=$(S3_DELAY)
 
 ODIR=obj
 LDIR =-L/data/john/libs/lib
