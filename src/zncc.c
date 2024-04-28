@@ -25,8 +25,8 @@ struct timespec started_zncc;
 #define EPOCH_MAX 18446744073709551615UL
 #define WRITE_GRANULARITY 4096
 #define EVICT_THRESH_ZONES_LEFT 1
-#define EVICT_THRESH_ZONES_REMOVE 20
-#define ZONES_USED 100
+#define EVICT_THRESH_ZONES_REMOVE 2
+#define ZONES_USED 10
 #define METRIC_BUFFER_CHARS 100000
 
 #define METRIC_HITRATE "hitrate"
@@ -37,6 +37,8 @@ struct timespec started_zncc;
 #define METRIC_CACHED "cached"
 #define METRIC_UNCACHED "uncach"
 #define METRIC_FREE_ZONES "freezones"
+#define METRIC_FIN_ZONE "finishzone"
+#define METRIC_ZONE_USED "zoneused"
 
 char METRIC_BUFFER[METRIC_BUFFER_CHARS];
 
@@ -393,20 +395,29 @@ zncc_write_chunk(zncc_chunkcache *cc, zncc_chunk_info chunk_info, char *data) {
         fprintf(stderr, "Failed to close zone\n");
     }
 
+    double t_now;
     if (chunk_info.chunk >= (cc->chunks_per_zone - 1)) {
+        struct timespec start_fin_zn, end_fin_zn;
+        TIME_NOW(&start_fin_zn);
         ret = zbd_finish_zones(fd, zone_ptr, 1);
         if (ret != 0) {
             fprintf(stderr, "Failed to finish zone\n");
         }
+        TIME_NOW(&end_fin_zn);
+        t_now = SINCE_BEGIN(end_fin_zn);
+        metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_FIN_ZONE,
+                    TIME_DIFFERENCE_MILLISEC(start_fin_zn, end_fin_zn));
     }
 
 cleanup:
     zbd_close(fd);
     free(zones);
     TIME_NOW(&end);
-    double t_now = SINCE_BEGIN(end);
+    t_now = SINCE_BEGIN(end);
     metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_WRITE,
                   TIME_DIFFERENCE_MILLISEC(start, end));
+    metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_ZONE_USED,
+                  (float)chunk_info.chunk / cc->chunks_per_zone);
     return ret;
 }
 
@@ -647,7 +658,6 @@ zncc_get(zncc_chunkcache *cc, char const *const uuid, off_t offset, uint32_t siz
             double t_now = SINCE_BEGIN(end_cached);
             metric_printf(cc->metrics_fd, "%f,%s,%0.2f\n", t_now, METRIC_CACHED,
                   TIME_DIFFERENCE_MILLISEC(start_loop, end_cached));
-        }
         } else {
             if (!called_s3) {
                 // Never called S3 on previous iteration

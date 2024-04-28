@@ -51,12 +51,10 @@ test_ll(zncc_chunkcache *cc) {
 }
 
 int
-test_get(zncc_chunkcache *cc, char *test_file) {
+test_get(zncc_chunkcache *cc, char *test_file, size_t xf) {
     int ret;
 
-    // 32K objects
-    size_t xf = 1024 * 1024 * 1024;
-    // size_t xf = 512*1024*1024;
+    long int sec_length_bench = 4*60*60;
 
     FILE *file;
     char line[40]; // Adjust buffer size as needed
@@ -68,15 +66,15 @@ test_get(zncc_chunkcache *cc, char *test_file) {
     }
 
     int count = 0;
-    int total = 800;
+
+    struct timespec start, end;
+    TIME_NOW(&start);
+    int print_one = 1;
 
     while (fgets(line, sizeof(line), file)) {
         char *v1;
         line[36] = '\0';
 
-        if (count % 5000 == 0) {
-            printf("%d / %d (%.4f): %s\n", count, total, (float) count / total, line);
-        }
         ret = zncc_get(cc, line, 0, xf, &v1);
         if (ret != 0) {
             fprintf(stderr, "Err for uuid=%s\n", line);
@@ -85,6 +83,22 @@ test_get(zncc_chunkcache *cc, char *test_file) {
         }
 
         count++;
+        TIME_NOW(&end);
+
+        long int tdiff = TIME_DIFFERENCE(start, end);
+
+        if (tdiff % 60 == 0) {
+            if (print_one) {
+                printf("%d: %lds / %ld (%f): %s\n", count, tdiff, sec_length_bench, (float)tdiff / sec_length_bench, line);
+                print_one = 0;
+            }
+        } else {
+            print_one = 1;
+        }
+
+        if (tdiff > sec_length_bench) {
+            break;
+        }
 
         // if (count == 30) {
         //     break;
@@ -317,12 +331,12 @@ main(int argc, char **argv) {
 
     // basic_write_test(device);
 
-    // if (test_file != NULL) {
-    //     ret = test_get(&cc, test_file);
-    //     if (ret != 0) {
-    //         fprintf(stderr, "Test failed\n");
-    //     }
-    // }
+    if (test_file != NULL) {
+        ret = test_get(&cc, test_file, chunk_size_int);
+        if (ret != 0) {
+            fprintf(stderr, "Test failed\n");
+        }
+    }
 
     // // v1[512] = '\0';
     // // dbg_printf("v1[512]=%s\n", v1);

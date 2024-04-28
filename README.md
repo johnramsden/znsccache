@@ -570,10 +570,14 @@ No Evict:
 stdev=8768.10166286344
 geomean=16705.160649196725
 
+```
+for s in hitrate evictions get read write freezones cached uncach finishzone; do echo "timestamp,type,timems" > $s.csv; grep $s obj* >> $s.csv; done
+```
 
-'disk=10485760KB,obj=32KB,uuids=26214400iter=2621440'
-'disk=10485760KB,obj=32KB,uuids=327680iter=2621440'
-'disk=41943040KB,obj=1024KB,uuids=3276800iter=327680'
-'disk=41943040KB,obj=1024KB,uuids=40960iter=327680'
-'disk=104857600KB,obj=1048576KB,uuids=100iter=800'
-'disk=104857600KB,obj=1048576KB,uuids=8000iter=800'
+---
+
+            Runtime,        gets
+32K,noevict: 11002092.938818, 3000000
+32K,evict: 14401014.269159, 912859
+1M,noevict: 7515494.630467, 3000000
+1M,evict: 14401063.336236, 256022
